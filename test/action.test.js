@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import test from "node:test";
+
+test("action metadata wires the frozen inputs and trusted artifact actions", async () => {
+  const metadata = await fs.readFile(new URL("../action.yml", import.meta.url), "utf8");
+  for (const input of [
+    "job_id",
+    "pr_number",
+    "pr_sha",
+    "test_path",
+    "context_path",
+    "apk_workflow_run_id",
+    "apk_artifact_name",
+  ]) {
+    assert.match(metadata, new RegExp(`^  ${input}:`, "m"));
+  }
+  assert.match(metadata, /uses: actions\/setup-node@v4/);
+  assert.match(metadata, /node-version: 20/);
+  assert.match(metadata, /uses: actions\/checkout@v4/);
+  assert.match(metadata, /ref: \$\{\{ inputs\.pr_sha \}\}/);
+  assert.match(metadata, /uses: actions\/download-artifact@v4/);
+  assert.match(metadata, /run-id: \$\{\{ inputs\.apk_workflow_run_id \}\}/);
+  assert.match(metadata, /uses: actions\/upload-artifact@v4/);
+  assert.match(metadata, /@loadmill\/droid-cua@2\.29\.0/);
+});
