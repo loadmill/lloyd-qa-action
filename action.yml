@@ -97,10 +97,7 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.initialize.outputs.artifact_name }}
-        path: |
-          ${{ runner.temp }}/lloyd/results
-          ${{ github.workspace }}/logs
-          ${{ github.workspace }}/droid-cua-artifacts
+        path: ${{ runner.temp }}/lloyd/results
         if-no-files-found: warn
         retention-days: 14
 

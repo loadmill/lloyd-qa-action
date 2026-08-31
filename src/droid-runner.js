@@ -33,6 +33,12 @@ function classify({exitCode, signal, timedOut, reportExists}) {
   return reportExists ? "test_failed" : "infrastructure_failed";
 }
 
+async function collectDirectory(source, destination) {
+  await fs.cp(source, destination, {recursive: true}).catch((error) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+}
+
 export async function runDroid({
   executable,
   apkPath,
@@ -121,6 +127,13 @@ export async function runDroid({
   parser.line(buffers.stderr);
   await updates;
   const reportExists = await fs.access(reportPath).then(() => true, () => false);
+  await Promise.all([
+    collectDirectory(path.join(workspace, "logs"), path.join(outputDirectory, "logs")),
+    collectDirectory(
+      path.join(workspace, "droid-cua-artifacts"),
+      path.join(outputDirectory, "droid-cua-artifacts"),
+    ),
+  ]);
   const status = classify({exitCode, signal, timedOut, reportExists});
 
   return {

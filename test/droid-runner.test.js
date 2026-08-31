@@ -29,6 +29,10 @@ test("spawns Droid with an argument array and reports parsed progress", async ()
   const outputDirectory = path.join(root, "results");
   const testPath = path.join(root, "unsafe name; echo nope.dcua");
   await fs.writeFile(testPath, "Open app\nVerify home\n");
+  await fs.mkdir(path.join(root, "logs"));
+  await fs.mkdir(path.join(root, "droid-cua-artifacts"));
+  await fs.writeFile(path.join(root, "logs", "debug.jsonl"), "debug");
+  await fs.writeFile(path.join(root, "droid-cua-artifacts", "video.mp4"), "video");
   let invocation;
   const callbacks = [];
 
@@ -91,6 +95,17 @@ test("spawns Droid with an argument array and reports parsed progress", async ()
     assert.equal(result.test.completedInstructions, 2);
     assert.equal(result.reportFile, "report.html");
     assert.equal(result.logFile, "runner.log");
+    assert.equal(
+      await fs.readFile(path.join(outputDirectory, "logs", "debug.jsonl"), "utf8"),
+      "debug",
+    );
+    assert.equal(
+      await fs.readFile(
+        path.join(outputDirectory, "droid-cua-artifacts", "video.mp4"),
+        "utf8",
+      ),
+      "video",
+    );
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }

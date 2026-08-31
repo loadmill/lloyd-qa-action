@@ -22,5 +22,6 @@ test("action metadata wires the frozen inputs and trusted artifact actions", asy
   assert.match(metadata, /uses: actions\/download-artifact@v4/);
   assert.match(metadata, /run-id: \$\{\{ inputs\.apk_workflow_run_id \}\}/);
   assert.match(metadata, /uses: actions\/upload-artifact@v4/);
+  assert.doesNotMatch(metadata, /github\.workspace.*(?:logs|droid-cua-artifacts)/);
   assert.match(metadata, /@loadmill\/droid-cua@2\.29\.0/);
 });
