@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 import {reportProgress} from "./callbacks.js";
@@ -8,6 +7,7 @@ import {runDroid} from "./droid-runner.js";
 import {readJson, STATE_FILE, writeResult} from "./job-files.js";
 import {findSingleApk, resolveRepositoryFile} from "./paths.js";
 import {failureResult} from "./results.js";
+import {parseTestPaths} from "./test-paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -23,7 +23,7 @@ async function verifyCheckout(workspace, sha) {
 
 export async function run(environment = process.env, dependencies = {}) {
   const resultsDirectory = requiredValue(environment, "LLOYD_RESULTS_DIR");
-  const repositoryTestPath = requiredValue(environment, "LLOYD_TEST_PATH");
+  let repositoryTestPaths = [];
   let startedAt = Date.now();
   try {
     ({startedAt} = await readJson(resultsDirectory, STATE_FILE));
@@ -33,16 +33,11 @@ export async function run(environment = process.env, dependencies = {}) {
 
   let result;
   try {
+    repositoryTestPaths = parseTestPaths(requiredValue(environment, "LLOYD_TEST_PATHS"));
     const workspace = requiredValue(environment, "GITHUB_WORKSPACE");
     await verifyCheckout(workspace, requiredValue(environment, "LLOYD_PR_SHA"));
-    const testPath = await resolveRepositoryFile({
-      workspace,
-      repositoryPath: repositoryTestPath,
-      label: "test_path",
-    });
-    if (path.extname(testPath).toLowerCase() !== ".dcua") {
-      throw new Error("test_path must identify a .dcua file");
-    }
+    const testPaths = await Promise.all(repositoryTestPaths.map((repositoryPath) =>
+      resolveRepositoryFile({workspace, repositoryPath, label: "test_paths"})));
     const contextInput = environment.LLOYD_CONTEXT_PATH?.trim();
     const contextPath = contextInput
       ? await resolveRepositoryFile({
@@ -54,19 +49,16 @@ export async function run(environment = process.env, dependencies = {}) {
     const apkPath = await findSingleApk(requiredValue(environment, "LLOYD_APK_DIR"));
     requiredValue(environment, "LOADMILL_API_TOKEN");
 
-    await reportProgress({
-      stage: "preparing_test",
-      startedAt,
-      testPath: repositoryTestPath,
-      environment,
+    await Promise.all(repositoryTestPaths.map((testPath) => reportProgress({
+      stage: "preparing_test", startedAt, testPath, environment,
       fetchImpl: dependencies.fetchImpl,
-    });
+    })));
     console.log(`Running ${DROID_CUA_PACKAGE}`);
     result = await (dependencies.runDroid ?? runDroid)({
       executable: requiredValue(environment, "LLOYD_DROID_EXECUTABLE"),
       apkPath,
-      testPath,
-      repositoryTestPath,
+      testPaths,
+      repositoryTestPaths,
       contextPath,
       workspace,
       outputDirectory: resultsDirectory,
@@ -77,11 +69,13 @@ export async function run(environment = process.env, dependencies = {}) {
     });
   } catch (error) {
     console.error(`Lloyd runner failed: ${error.message}`);
-    result = failureResult({
-      testPath: repositoryTestPath,
-      startedAt,
-      detail: error.message,
-    });
+    const fallbackPaths = repositoryTestPaths.length ? repositoryTestPaths : [""];
+    result = {
+      status: "infrastructure_failed",
+      results: fallbackPaths.map((testPath) => failureResult({
+        testPath, startedAt, detail: error.message,
+      })),
+    };
   }
   await writeResult(resultsDirectory, result);
   return result;

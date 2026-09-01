@@ -1,7 +1,7 @@
 import {createHash} from "node:crypto";
 
 export const DEFAULT_LOADMILL_BASE_URL = "https://app.loadmill.com";
-export const DROID_CUA_PACKAGE = "@loadmill/droid-cua@2.29.0";
+export const DROID_CUA_PACKAGE = "@loadmill/droid-cua@2.35.0";
 export const RESULT_FILE = "result.json";
 
 export function requiredValue(environment, name) {

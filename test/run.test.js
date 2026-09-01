@@ -18,6 +18,7 @@ async function fixture() {
   await fs.mkdir(path.join(workspace, "tests"), {recursive: true});
   await fs.mkdir(apkDirectory);
   await fs.writeFile(path.join(workspace, "tests", "login.dcua"), "Open app\n");
+  await fs.writeFile(path.join(workspace, "tests", "checkout.dcua"), "Open cart\n");
   await fs.writeFile(path.join(workspace, "tests", "context.md"), "context\n");
   await fs.writeFile(path.join(apkDirectory, "app.apk"), "apk");
   await execFileAsync("git", ["init", "-q"], {cwd: workspace});
@@ -37,7 +38,7 @@ function environment(value) {
     LLOYD_JOB_ID: "job-1",
     LLOYD_PR_NUMBER: "12",
     LLOYD_PR_SHA: value.sha,
-    LLOYD_TEST_PATH: "tests/login.dcua",
+    LLOYD_TEST_PATHS: '["tests/login.dcua","tests/checkout.dcua"]',
     LLOYD_CONTEXT_PATH: "tests/context.md",
     LLOYD_APK_WORKFLOW_RUN_ID: "1001",
     LLOYD_APK_ARTIFACT_NAME: "app-debug-12",
@@ -60,29 +61,22 @@ test("prepares validated files only after verifying the exact checkout SHA", asy
       fetchImpl: async () => ({ok: true, status: 200}),
       runDroid: async (input) => {
         invocation = input;
-        return {
-          status: "passed",
-          detail: null,
-          durationSeconds: 1,
-          exitCode: 0,
-          test: {
-            path: input.repositoryTestPath,
-            totalInstructions: 1,
-            completedInstructions: 1,
-            currentInstruction: null,
-          },
-          loadmillRun: null,
-          reportFile: "report.html",
-          logFile: "runner.log",
-        };
+        return {status: "passed", results: input.repositoryTestPaths.map((testPath) => ({
+          status: "passed", detail: null, durationSeconds: 1, exitCode: 0,
+          test: {path: testPath, totalInstructions: 1, completedInstructions: 1,
+            currentInstruction: null},
+          loadmillRun: null, reportFile: "report.html", logFile: "runner.log",
+        }))};
       },
     });
     assert.equal(result.status, "passed");
-    assert.equal(invocation.repositoryTestPath, "tests/login.dcua");
-    assert.equal(
-      invocation.testPath,
-      await fs.realpath(path.join(value.workspace, "tests", "login.dcua")),
-    );
+    assert.deepEqual(invocation.repositoryTestPaths, [
+      "tests/login.dcua", "tests/checkout.dcua",
+    ]);
+    assert.deepEqual(invocation.testPaths, await Promise.all([
+      fs.realpath(path.join(value.workspace, "tests", "login.dcua")),
+      fs.realpath(path.join(value.workspace, "tests", "checkout.dcua")),
+    ]));
     assert.equal(
       invocation.contextPath,
       await fs.realpath(path.join(value.workspace, "tests", "context.md")),
@@ -109,7 +103,8 @@ test("a checkout SHA mismatch is an infrastructure failure", async () => {
       },
     });
     assert.equal(result.status, "infrastructure_failed");
-    assert.match(result.detail, /does not match pr_sha/);
+    assert.equal(result.results.length, 2);
+    assert.match(result.results[0].detail, /does not match pr_sha/);
   } finally {
     await fs.rm(value.root, {recursive: true, force: true});
   }

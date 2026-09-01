@@ -1,5 +1,5 @@
 name: Lloyd QA
-description: Run a Lloyd-selected Droid CUA test and report the result to Loadmill.
+description: Run Lloyd-selected Droid CUA tests and report results to Loadmill.
 
 inputs:
   job_id:
@@ -11,8 +11,8 @@ inputs:
   pr_sha:
     description: Exact pull request commit SHA to test.
     required: true
-  test_path:
-    description: Repository-relative path to the selected .dcua test.
+  test_paths:
+    description: JSON array of repository-relative .dcua test paths.
     required: true
   context_path:
     description: Optional repository-relative Droid context file.
@@ -46,7 +46,7 @@ runs:
       shell: bash
       env:
         LLOYD_JOB_ID: ${{ inputs.job_id }}
-        LLOYD_TEST_PATH: ${{ inputs.test_path }}
+        LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
         LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
         LOADMILL_API_TOKEN: ${{ env.LOADMILL_API_TOKEN }}
         LOADMILL_BASE_URL: ${{ env.LOADMILL_BASE_URL }}
@@ -56,7 +56,7 @@ runs:
 
     - name: Install pinned Droid CUA
       shell: bash
-      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "@loadmill/droid-cua@2.29.0"
+      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "@loadmill/droid-cua@2.35.0"
 
     - name: Check out exact PR commit
       uses: actions/checkout@v4
@@ -79,7 +79,7 @@ runs:
       env:
         LLOYD_JOB_ID: ${{ inputs.job_id }}
         LLOYD_PR_SHA: ${{ inputs.pr_sha }}
-        LLOYD_TEST_PATH: ${{ inputs.test_path }}
+        LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
         LLOYD_CONTEXT_PATH: ${{ inputs.context_path }}
         LLOYD_APK_DIR: ${{ runner.temp }}/lloyd/apk
         LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
@@ -107,7 +107,7 @@ runs:
       shell: bash
       env:
         LLOYD_JOB_ID: ${{ inputs.job_id }}
-        LLOYD_TEST_PATH: ${{ inputs.test_path }}
+        LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
         LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
         LLOYD_RESULTS_ARTIFACT_NAME: ${{ steps.initialize.outputs.artifact_name }}
         LLOYD_INITIALIZE_OUTCOME: ${{ steps.initialize.outcome }}

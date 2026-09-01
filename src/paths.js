@@ -7,11 +7,18 @@ function isInside(root, candidate) {
 }
 
 export async function resolveRepositoryFile({workspace, repositoryPath, label}) {
-  if (typeof repositoryPath !== "string" || repositoryPath.trim() === "") {
+  if (
+    typeof repositoryPath !== "string" ||
+    repositoryPath.trim() === "" ||
+    repositoryPath.trim() !== repositoryPath
+  ) {
     throw new Error(`${label} must be a non-empty repository-relative path`);
   }
   if (path.posix.isAbsolute(repositoryPath) || path.win32.isAbsolute(repositoryPath)) {
     throw new Error(`${label} must be repository-relative: ${repositoryPath}`);
+  }
+  if (repositoryPath === "." || path.posix.normalize(repositoryPath) !== repositoryPath) {
+    throw new Error(`${label} must be a normalized repository-relative path: ${repositoryPath}`);
   }
   const root = await fs.realpath(workspace);
   const candidate = path.resolve(root, repositoryPath);

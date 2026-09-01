@@ -10,7 +10,7 @@ import {completionPayload} from "../src/results.js";
 function environment(resultsDirectory) {
   return {
     LLOYD_JOB_ID: "job-123",
-    LLOYD_TEST_PATH: "tests/login.dcua",
+    LLOYD_TEST_PATHS: '["tests/login.dcua","tests/checkout.dcua"]',
     LLOYD_RESULTS_DIR: resultsDirectory,
     LLOYD_RESULTS_ARTIFACT_NAME: "lloyd-results-fixed",
     LLOYD_INITIALIZE_OUTCOME: "success",
@@ -65,15 +65,21 @@ test("builds exactly the frozen completion payload", () => {
 
 test("posts completion after reading the structured result", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-complete-"));
-  await writeResult(directory, passedResult);
-  let payload;
+  const checkoutResult = {
+    ...passedResult,
+    test: {...passedResult.test, path: "tests/checkout.dcua"},
+  };
+  await writeResult(directory, {status: "passed", results: [passedResult, checkoutResult]});
+  const payloads = [];
   try {
-    const result = await complete(environment(directory), async (_url, options) => {
-      payload = JSON.parse(options.body);
+    const batch = await complete(environment(directory), async (_url, options) => {
+      payloads.push(JSON.parse(options.body));
       return {ok: true, status: 200};
     });
-    assert.equal(result.status, "passed");
-    assert.equal(payload.status, "passed");
+    assert.equal(batch.status, "passed");
+    assert.deepEqual(payloads.map((payload) => payload.test.path), [
+      "tests/login.dcua", "tests/checkout.dcua",
+    ]);
   } finally {
     await fs.rm(directory, {recursive: true, force: true});
   }
@@ -81,7 +87,7 @@ test("posts completion after reading the structured result", async () => {
 
 test("an artifact upload failure becomes infrastructure_failed", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-upload-"));
-  await writeResult(directory, passedResult);
+  await writeResult(directory, {status: "passed", results: [passedResult]});
   const env = environment(directory);
   env.LLOYD_UPLOAD_OUTCOME = "failure";
   let payload;
@@ -100,12 +106,19 @@ test("an artifact upload failure becomes infrastructure_failed", async () => {
 
 test("a completion callback failure is fatal", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-callback-"));
-  await writeResult(directory, passedResult);
+  await writeResult(directory, {status: "passed", results: [passedResult, {
+    ...passedResult, test: {...passedResult.test, path: "tests/checkout.dcua"},
+  }]});
+  let attempts = 0;
   try {
     await assert.rejects(
-      complete(environment(directory), async () => ({ok: false, status: 503})),
+      complete(environment(directory), async () => {
+        attempts += 1;
+        return {ok: false, status: 503};
+      }),
       /complete callback failed/,
     );
+    assert.equal(attempts, 2);
   } finally {
     await fs.rm(directory, {recursive: true, force: true});
   }

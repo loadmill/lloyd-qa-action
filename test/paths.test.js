@@ -36,6 +36,14 @@ test("accepts a regular repository file and rejects traversal", async () => {
       }),
       /repository-relative/,
     );
+    await assert.rejects(
+      resolveRepositoryFile({
+        workspace,
+        repositoryPath: "tests/../tests/login.dcua",
+        label: "test_path",
+      }),
+      /normalized repository-relative/,
+    );
   } finally {
     await fs.rm(parent, {recursive: true, force: true});
   }

@@ -24,11 +24,15 @@ test("parses the same executable instruction lines as Droid", () => {
   );
 });
 
-test("spawns Droid with an argument array and reports parsed progress", async () => {
+test("runs selected tests in one process and reports each result", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-runner-"));
   const outputDirectory = path.join(root, "results");
-  const testPath = path.join(root, "unsafe name; echo nope.dcua");
-  await fs.writeFile(testPath, "Open app\nVerify home\n");
+  const testPaths = [
+    path.join(root, "unsafe name; echo nope.dcua"),
+    path.join(root, "checkout.dcua"),
+  ];
+  await fs.writeFile(testPaths[0], "Open app\nVerify home\n");
+  await fs.writeFile(testPaths[1], "Open cart\n");
   await fs.mkdir(path.join(root, "logs"));
   await fs.mkdir(path.join(root, "droid-cua-artifacts"));
   await fs.writeFile(path.join(root, "logs", "debug.jsonl"), "debug");
@@ -45,21 +49,33 @@ test("spawns Droid with an argument array and reports parsed progress", async ()
     queueMicrotask(async () => {
       child.stdout.write("Provisioning Loadmill Cloud device\n");
       child.stdout.write("Connected to Loadmill Cloud device mtc_test\n");
+      child.stdout.write("[1/2] tests/unsafe name; echo nope.dcua\n");
       child.stdout.write("Open app\nVerify home\n");
       child.stdout.write("Test completed successfully.\n");
+      const firstReport = path.join(outputDirectory, "login--report.html");
+      await fs.writeFile(firstReport, "first");
+      child.stdout.write(`HTML report saved: ${firstReport}\n`);
+      child.stdout.write("[2/2] tests/checkout.dcua\n");
+      child.stdout.write("Open cart\n");
+      child.stderr.write("Test failed: assertion failed\n");
+      const secondReport = path.join(outputDirectory, "checkout--report.html");
+      await fs.writeFile(secondReport, "second");
+      child.stdout.write(`HTML report saved: ${secondReport}\n`);
       const reportPath = args[args.indexOf("--report") + 1];
       await fs.writeFile(reportPath, "<html></html>");
-      child.emit("close", 0, null);
+      child.emit("close", 1, null);
     });
     return child;
   }
 
   try {
-    const result = await runDroid({
+    const batch = await runDroid({
       executable: "/tmp/lloyd-tools/node_modules/.bin/droid-cua",
       apkPath: path.join(root, "app.apk"),
-      testPath,
-      repositoryTestPath: "tests/unsafe name; echo nope.dcua",
+      testPaths,
+      repositoryTestPaths: [
+        "tests/unsafe name; echo nope.dcua", "tests/checkout.dcua",
+      ],
       contextPath: path.join(root, "context.md"),
       workspace: root,
       outputDirectory,
@@ -72,7 +88,8 @@ test("spawns Droid with an argument array and reports parsed progress", async ()
       },
     });
 
-    assert.equal(result.status, "passed");
+    assert.equal(batch.status, "test_failed");
+    assert.deepEqual(batch.results.map((result) => result.status), ["passed", "test_failed"]);
     assert.match(invocation.executable, /node_modules\/\.bin\/droid-cua$/);
     assert.equal(invocation.options.shell, undefined);
     assert.equal(invocation.options.cwd, root);
@@ -80,21 +97,15 @@ test("spawns Droid with an argument array and reports parsed progress", async ()
     assert.ok(invocation.args.includes("Google Pixel 8"));
     assert.ok(invocation.args.includes("14"));
     assert.ok(invocation.args.includes("loadmill-cloud"));
-    assert.ok(invocation.args.includes(testPath));
-    assert.deepEqual(
-      callbacks.map(({body}) => body.stage),
-      [
-        "provisioning",
-        "connected",
-        "running_instruction",
-        "running_instruction",
-        "collecting_results",
-      ],
-    );
-    assert.equal(result.test.totalInstructions, 2);
-    assert.equal(result.test.completedInstructions, 2);
-    assert.equal(result.reportFile, "report.html");
-    assert.equal(result.logFile, "runner.log");
+    assert.deepEqual(invocation.args.slice(0, 3), ["run", ...testPaths]);
+    assert.equal(invocation.args.includes("--instructions"), false);
+    assert.ok(callbacks.some(({body}) =>
+      body.test.path === "tests/checkout.dcua" && body.stage === "running_instruction"));
+    assert.equal(batch.results[0].test.totalInstructions, 2);
+    assert.equal(batch.results[0].test.completedInstructions, 2);
+    assert.equal(batch.results[0].reportFile, "login--report.html");
+    assert.equal(batch.results[1].reportFile, "checkout--report.html");
+    assert.equal(batch.results[0].logFile, "runner.log");
     assert.equal(
       await fs.readFile(path.join(outputDirectory, "logs", "debug.jsonl"), "utf8"),
       "debug",
@@ -121,6 +132,7 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     child.stderr = new PassThrough();
     child.kill = () => true;
     queueMicrotask(async () => {
+      child.stderr.write("Test failed: assertion failed\n");
       await fs.writeFile(args[args.indexOf("--report") + 1], "report");
       child.emit("close", 1, null);
     });
@@ -130,8 +142,8 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     const result = await runDroid({
       executable: "droid-cua",
       apkPath: path.join(root, "app.apk"),
-      testPath,
-      repositoryTestPath: "test.dcua",
+      testPaths: [testPath],
+      repositoryTestPaths: ["test.dcua"],
       contextPath: null,
       workspace: root,
       outputDirectory: path.join(root, "results"),
@@ -140,6 +152,7 @@ test("classifies a CLI failure with a report as test_failed", async () => {
       spawnProcess,
     });
     assert.equal(result.status, "test_failed");
+    assert.equal(result.results[0].status, "test_failed");
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }

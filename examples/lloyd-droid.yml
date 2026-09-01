@@ -16,8 +16,8 @@ on:
         description: Exact pull request commit SHA
         required: true
         type: string
-      test_path:
-        description: Repository-relative .dcua test path
+      test_paths:
+        description: JSON array of repository-relative .dcua test paths
         required: true
         type: string
       context_path:
@@ -38,17 +38,17 @@ permissions:
   actions: read
 
 jobs:
-  run-selected-test:
+  run-selected-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Run Lloyd-selected Droid test
+      - name: Run Lloyd-selected Droid tests
         uses: loadmill/lloyd-qa-action@v1
         with:
           job_id: ${{ inputs.job_id }}
           pr_number: ${{ inputs.pr_number }}
           pr_sha: ${{ inputs.pr_sha }}
-          test_path: ${{ inputs.test_path }}
+          test_paths: ${{ inputs.test_paths }}
           context_path: ${{ inputs.context_path }}
           apk_workflow_run_id: ${{ inputs.apk_workflow_run_id }}
           apk_artifact_name: ${{ inputs.apk_artifact_name }}

@@ -4,10 +4,11 @@ import path from "node:path";
 import {reportProgress} from "./callbacks.js";
 import {createProgressParser, parseInstructions} from "./droid-progress.js";
 
-const TIMEOUT_MS = 25 * 60 * 1000;
+const TIMEOUT_MS = 40 * 60 * 1000;
 
-export function createDroidArgs({apkPath, testPath, contextPath, reportPath}) {
+export function createDroidArgs({apkPath, testPaths, contextPath, reportPath}) {
   const args = [
+    "run", ...testPaths,
     "--llm-provider", "loadmill",
     "--cua-model", "loadmill-pulse",
     "--device-source", "loadmill-cloud",
@@ -15,7 +16,6 @@ export function createDroidArgs({apkPath, testPath, contextPath, reportPath}) {
     "--device-name", "Google Pixel 8",
     "--os-version", "14",
     "--app", apkPath,
-    "--instructions", testPath,
     "--artifacts", "video",
     "--report", reportPath,
     "--debug",
@@ -42,8 +42,8 @@ async function collectDirectory(source, destination) {
 export async function runDroid({
   executable,
   apkPath,
-  testPath,
-  repositoryTestPath,
+  testPaths,
+  repositoryTestPaths,
   contextPath,
   workspace,
   outputDirectory,
@@ -56,25 +56,53 @@ export async function runDroid({
   await fs.mkdir(outputDirectory, {recursive: true});
   const reportPath = path.join(outputDirectory, "report.html");
   const logPath = path.join(outputDirectory, "runner.log");
-  const instructions = parseInstructions(await fs.readFile(testPath, "utf8"));
   let updates = Promise.resolve();
-  const parser = createProgressParser({
-    instructions,
-    publish(stage, details = {}) {
-      updates = updates.then(() =>
-        reportProgress({
-          stage,
-          ...details,
-          startedAt,
-          testPath: repositoryTestPath,
-          environment,
-          fetchImpl,
-        }),
-      );
-    },
-  });
+  const tests = await Promise.all(testPaths.map(async (testPath, index) => {
+    const instructions = parseInstructions(await fs.readFile(testPath, "utf8"));
+    const state = {
+      testPath: repositoryTestPaths[index], instructions, failed: false,
+      reportFile: null, startedAt: Date.now(), finishedAt: null,
+    };
+    state.parser = createProgressParser({
+      instructions,
+      publish(stage, details = {}) {
+        updates = updates.then(() => reportProgress({
+          stage, ...details, startedAt, testPath: state.testPath,
+          environment, fetchImpl,
+        }));
+      },
+    });
+    return state;
+  }));
+  let activeIndex = 0;
 
-  const args = createDroidArgs({apkPath, testPath, contextPath, reportPath});
+  function parseRunnerLine(rawLine) {
+    const value = rawLine.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "").trim();
+    const boundary = value.match(/^\[(\d+)\/(\d+)\]\s+/);
+    if (boundary) {
+      if (tests[activeIndex] && Number(boundary[1]) - 1 !== activeIndex) {
+        tests[activeIndex].finishedAt ??= Date.now();
+      }
+      activeIndex = Number(boundary[1]) - 1;
+      if (tests[activeIndex]) tests[activeIndex].startedAt = Date.now();
+    }
+    const active = tests[activeIndex];
+    if (!active) return;
+    if (value.startsWith("Test failed:")) {
+      active.failed = true;
+      active.parser.line("Ending Loadmill Cloud session...");
+    }
+    if (value.startsWith("HTML report saved: ")) {
+      const candidate = path.resolve(value.slice("HTML report saved: ".length));
+      const relative = path.relative(outputDirectory, candidate);
+      if (relative && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+        active.reportFile = relative;
+      }
+    }
+    active.parser.line(rawLine);
+  }
+
+  const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath});
   const child = spawnProcess(executable, args, {
     cwd: workspace,
     env: {...process.env, LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN},
@@ -89,7 +117,7 @@ export async function runDroid({
     destination.write(chunk);
     const lines = `${buffers[stream]}${text}`.split(/\r?\n/);
     buffers[stream] = lines.pop() ?? "";
-    lines.forEach(parser.line);
+    lines.forEach(parseRunnerLine);
   }
 
   child.stdout?.on("data", (chunk) => capture(chunk, "stdout", process.stdout));
@@ -123,8 +151,8 @@ export async function runDroid({
     await fs.writeFile(logPath, log, {mode: 0o600});
   }
 
-  parser.line(buffers.stdout);
-  parser.line(buffers.stderr);
+  parseRunnerLine(buffers.stdout);
+  parseRunnerLine(buffers.stderr);
   await updates;
   const reportExists = await fs.access(reportPath).then(() => true, () => false);
   await Promise.all([
@@ -134,19 +162,29 @@ export async function runDroid({
       path.join(outputDirectory, "droid-cua-artifacts"),
     ),
   ]);
-  const status = classify({exitCode, signal, timedOut, reportExists});
-
-  return {
-    status,
-    detail: timedOut ? "Droid CUA exceeded the 25 minute timeout" : null,
-    durationSeconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000)),
-    exitCode,
-    test: {
-      path: repositoryTestPath,
-      ...parser.result(exitCode),
-    },
-    loadmillRun: null,
-    reportFile: reportExists ? "report.html" : null,
-    logFile: "runner.log",
-  };
+  const endedAt = Date.now();
+  tests[activeIndex].finishedAt ??= endedAt;
+  if (tests.length === 1 && reportExists) tests[0].reportFile ??= "report.html";
+  const results = tests.map((test, index) => {
+    const completed = test.finishedAt !== null || index <= activeIndex;
+    const testStatus = completed && test.reportFile
+      ? (test.failed ? "test_failed" : "passed")
+      : classify({exitCode, signal, timedOut, reportExists: false});
+    const testExitCode = testStatus === "passed" ? 0
+      : testStatus === "test_failed" ? 1
+        : testStatus === "cancelled" ? 130 : null;
+    return {
+      status: testStatus,
+      detail: timedOut && !test.reportFile ? "Droid CUA exceeded the 40 minute timeout" : null,
+      durationSeconds: Math.max(0, Math.round(((test.finishedAt ?? endedAt) - test.startedAt) / 1000)),
+      exitCode: testExitCode,
+      test: {path: test.testPath, ...test.parser.result(testExitCode)},
+      loadmillRun: null,
+      reportFile: test.reportFile,
+      logFile: "runner.log",
+    };
+  });
+  const status = ["infrastructure_failed", "cancelled", "test_failed"]
+    .find((candidate) => results.some((result) => result.status === candidate)) ?? "passed";
+  return {status, results};
 }
