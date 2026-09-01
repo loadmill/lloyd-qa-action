@@ -39,6 +39,16 @@ async function collectDirectory(source, destination) {
   });
 }
 
+async function reportStatus(outputDirectory, reportFile) {
+  if (!reportFile) return null;
+  const html = await fs.readFile(path.join(outputDirectory, reportFile), "utf8").catch(() => "");
+  const status = html.match(/class="dc-pill dc-pill-(pass|fail|error|stopped|skipped)"/)?.[1];
+  if (status === "pass") return "passed";
+  if (status === "stopped") return "cancelled";
+  if (status === "fail" || status === "error") return "test_failed";
+  return null;
+}
+
 export async function runDroid({
   executable,
   apkPath,
@@ -60,7 +70,7 @@ export async function runDroid({
   const tests = await Promise.all(testPaths.map(async (testPath, index) => {
     const instructions = parseInstructions(await fs.readFile(testPath, "utf8"));
     const state = {
-      testPath: repositoryTestPaths[index], instructions, failed: false,
+      testPath: repositoryTestPaths[index], instructions,
       reportFile: null, startedAt: Date.now(), finishedAt: null,
     };
     state.parser = createProgressParser({
@@ -88,15 +98,12 @@ export async function runDroid({
     }
     const active = tests[activeIndex];
     if (!active) return;
-    if (value.startsWith("Test failed:")) {
-      active.failed = true;
-      active.parser.line("Ending Loadmill Cloud session...");
-    }
     if (value.startsWith("HTML report saved: ")) {
       const candidate = path.resolve(value.slice("HTML report saved: ".length));
       const relative = path.relative(outputDirectory, candidate);
       if (relative && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
         active.reportFile = relative;
+        active.parser.line("Ending Loadmill Cloud session...");
       }
     }
     active.parser.line(rawLine);
@@ -165,11 +172,11 @@ export async function runDroid({
   const endedAt = Date.now();
   tests[activeIndex].finishedAt ??= endedAt;
   if (tests.length === 1 && reportExists) tests[0].reportFile ??= "report.html";
-  const results = tests.map((test, index) => {
-    const completed = test.finishedAt !== null || index <= activeIndex;
-    const testStatus = completed && test.reportFile
-      ? (test.failed ? "test_failed" : "passed")
-      : classify({exitCode, signal, timedOut, reportExists: false});
+  const results = await Promise.all(tests.map(async (test) => {
+    const reportedStatus = await reportStatus(outputDirectory, test.reportFile);
+    const testStatus = reportedStatus ?? classify({
+      exitCode, signal, timedOut, reportExists: false,
+    });
     const testExitCode = testStatus === "passed" ? 0
       : testStatus === "test_failed" ? 1
         : testStatus === "cancelled" ? 130 : null;
@@ -183,7 +190,25 @@ export async function runDroid({
       reportFile: test.reportFile,
       logFile: "runner.log",
     };
-  });
+  }));
+  if (results.every((result) => result.status === "passed") && exitCode !== 0) {
+    const last = results[Math.min(activeIndex, results.length - 1)];
+    if (timedOut) {
+      Object.assign(last, {
+        status: "infrastructure_failed",
+        detail: "Droid CUA exceeded the 40 minute timeout",
+        exitCode: null,
+      });
+    } else if (exitCode === 130 || signal === "SIGINT" || signal === "SIGTERM") {
+      Object.assign(last, {status: "cancelled", detail: null, exitCode: 130});
+    } else {
+      Object.assign(last, {
+        status: "infrastructure_failed",
+        detail: `Droid CUA exited with code ${exitCode} after reporting all tests passed`,
+        exitCode,
+      });
+    }
+  }
   const status = ["infrastructure_failed", "cancelled", "test_failed"]
     .find((candidate) => results.some((result) => result.status === candidate)) ?? "passed";
   return {status, results};

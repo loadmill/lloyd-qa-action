@@ -15,6 +15,10 @@ const callbackEnvironment = {
   GITHUB_RUN_ATTEMPT: "1",
 };
 
+function htmlReport(status) {
+  return `<span class="dc-pill dc-pill-${status}">${status}</span>`;
+}
+
 test("parses the same executable instruction lines as Droid", () => {
   assert.deepEqual(
     parseInstructions(
@@ -51,15 +55,16 @@ test("runs selected tests in one process and reports each result", async () => {
       child.stdout.write("Connected to Loadmill Cloud device mtc_test\n");
       child.stdout.write("[1/2] tests/unsafe name; echo nope.dcua\n");
       child.stdout.write("Open app\nVerify home\n");
-      child.stdout.write("Test completed successfully.\n");
       const firstReport = path.join(outputDirectory, "login--report.html");
-      await fs.writeFile(firstReport, "first");
+      await fs.writeFile(firstReport, htmlReport("fail"));
       child.stdout.write(`HTML report saved: ${firstReport}\n`);
       child.stdout.write("[2/2] tests/checkout.dcua\n");
+      // stderr may arrive after the next stdout boundary; report status remains authoritative.
+      child.stderr.write("Test failed: first test assertion failed\n");
       child.stdout.write("Open cart\n");
-      child.stderr.write("Test failed: assertion failed\n");
+      child.stdout.write("Test completed successfully.\n");
       const secondReport = path.join(outputDirectory, "checkout--report.html");
-      await fs.writeFile(secondReport, "second");
+      await fs.writeFile(secondReport, htmlReport("pass"));
       child.stdout.write(`HTML report saved: ${secondReport}\n`);
       const reportPath = args[args.indexOf("--report") + 1];
       await fs.writeFile(reportPath, "<html></html>");
@@ -89,7 +94,7 @@ test("runs selected tests in one process and reports each result", async () => {
     });
 
     assert.equal(batch.status, "test_failed");
-    assert.deepEqual(batch.results.map((result) => result.status), ["passed", "test_failed"]);
+    assert.deepEqual(batch.results.map((result) => result.status), ["test_failed", "passed"]);
     assert.match(invocation.executable, /node_modules\/\.bin\/droid-cua$/);
     assert.equal(invocation.options.shell, undefined);
     assert.equal(invocation.options.cwd, root);
@@ -102,7 +107,7 @@ test("runs selected tests in one process and reports each result", async () => {
     assert.ok(callbacks.some(({body}) =>
       body.test.path === "tests/checkout.dcua" && body.stage === "running_instruction"));
     assert.equal(batch.results[0].test.totalInstructions, 2);
-    assert.equal(batch.results[0].test.completedInstructions, 2);
+    assert.equal(batch.results[0].test.completedInstructions, 1);
     assert.equal(batch.results[0].reportFile, "login--report.html");
     assert.equal(batch.results[1].reportFile, "checkout--report.html");
     assert.equal(batch.results[0].logFile, "runner.log");
@@ -133,7 +138,7 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     child.kill = () => true;
     queueMicrotask(async () => {
       child.stderr.write("Test failed: assertion failed\n");
-      await fs.writeFile(args[args.indexOf("--report") + 1], "report");
+      await fs.writeFile(args[args.indexOf("--report") + 1], htmlReport("fail"));
       child.emit("close", 1, null);
     });
     return child;
@@ -153,6 +158,41 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     });
     assert.equal(result.status, "test_failed");
     assert.equal(result.results[0].status, "test_failed");
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("classifies an unexplained nonzero exit after a passing report as infrastructure_failed", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-exit-"));
+  const testPath = path.join(root, "test.dcua");
+  await fs.writeFile(testPath, "Verify home\n");
+  function spawnProcess(_executable, args) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    queueMicrotask(async () => {
+      await fs.writeFile(args[args.indexOf("--report") + 1], htmlReport("pass"));
+      child.emit("close", 1, null);
+    });
+    return child;
+  }
+  try {
+    const batch = await runDroid({
+      executable: "droid-cua",
+      apkPath: path.join(root, "app.apk"),
+      testPaths: [testPath],
+      repositoryTestPaths: ["test.dcua"],
+      contextPath: null,
+      workspace: root,
+      outputDirectory: path.join(root, "results"),
+      startedAt: Date.now(),
+      environment: callbackEnvironment,
+      spawnProcess,
+    });
+    assert.equal(batch.status, "infrastructure_failed");
+    assert.match(batch.results[0].detail, /exited with code 1/);
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }
