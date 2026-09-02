@@ -16,14 +16,14 @@ test("action metadata wires the frozen inputs and trusted artifact actions", asy
     assert.match(metadata, new RegExp(`^  ${input}:`, "m"));
   }
   assert.doesNotMatch(metadata, /^  test_path:/m);
-  assert.match(metadata, /uses: actions\/setup-node@v4/);
-  assert.match(metadata, /node-version: 20/);
-  assert.match(metadata, /uses: actions\/checkout@v4/);
+  assert.match(metadata, /uses: actions\/setup-node@v6/);
+  assert.match(metadata, /node-version: 24/);
+  assert.match(metadata, /uses: actions\/checkout@v6/);
   assert.match(metadata, /ref: \$\{\{ inputs\.pr_sha \}\}/);
   assert.match(metadata, /uses: actions\/download-artifact@v8/);
   assert.match(metadata, /run-id: \$\{\{ inputs\.apk_workflow_run_id \}\}/);
   assert.match(metadata, /skip-decompress: true/);
-  assert.match(metadata, /uses: actions\/upload-artifact@v4/);
+  assert.match(metadata, /uses: actions\/upload-artifact@v7/);
   assert.doesNotMatch(metadata, /github\.workspace.*(?:logs|droid-cua-artifacts)/);
   assert.match(metadata, /@loadmill\/droid-cua@2\.36\.0/);
 });

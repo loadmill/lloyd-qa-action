@@ -37,9 +37,9 @@ runs:
   using: composite
   steps:
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
-        node-version: 20
+        node-version: 24
 
     - id: initialize
       name: Initialize Lloyd job
@@ -59,7 +59,7 @@ runs:
       run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "@loadmill/droid-cua@2.36.0"
 
     - name: Check out exact PR commit
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         ref: ${{ inputs.pr_sha }}
         persist-credentials: false
@@ -95,7 +95,7 @@ runs:
       name: Upload Lloyd results
       if: ${{ always() }}
       continue-on-error: true
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ steps.initialize.outputs.artifact_name }}
         path: ${{ runner.temp }}/lloyd/results
