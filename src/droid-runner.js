@@ -127,7 +127,9 @@ export async function runDroid({
     const text = chunk.toString();
     log += text;
     identifierBuffer = `${identifierBuffer}${text}`.slice(-4_096);
-    for (const match of identifierBuffer.matchAll(/execution-(run-\d+(?:-\d+)?)-/g)) {
+    for (const match of identifierBuffer.matchAll(
+      /execution-(run-\d+(?:-\d+)?)-\d{4}-\d{2}-\d{2}T/g,
+    )) {
       localRunIds.add(match[1]);
     }
     destination.write(chunk);

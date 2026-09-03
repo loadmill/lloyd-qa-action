@@ -54,13 +54,17 @@ test("runs selected tests in one process and reports each result", async () => {
       child.stdout.write("Provisioning Loadmill Cloud device\n");
       child.stdout.write("Connected to Loadmill Cloud device mtc_test\n");
       child.stdout.write("[1/2] tests/unsafe name; echo nope.dcua\n");
-      child.stdout.write("Debug logging enabled: /tmp/execution-run-100-debug.jsonl\n");
+      child.stdout.write(
+        "Debug logging enabled: /tmp/execution-run-1788426858080-2026-09-03T09-14-18-511Z.jsonl\n",
+      );
       child.stdout.write("Open app\nVerify home\n");
       const firstReport = path.join(outputDirectory, "login--report.html");
       await fs.writeFile(firstReport, htmlReport("fail"));
       child.stdout.write(`HTML report saved: ${firstReport}\n`);
       child.stdout.write("[2/2] tests/checkout.dcua\n");
-      child.stdout.write("Debug logging enabled: /tmp/execution-run-101-2-debug.jsonl\n");
+      child.stdout.write(
+        "Debug logging enabled: /tmp/execution-run-1788426858081-2-2026-09-03T09-15-18-511Z.jsonl\n",
+      );
       // stderr may arrive after the next stdout boundary; report status remains authoritative.
       child.stderr.write("Test failed: first test assertion failed\n");
       child.stdout.write("Open cart\n");
@@ -90,7 +94,10 @@ test("runs selected tests in one process and reports each result", async () => {
       environment: callbackEnvironment,
       spawnProcess,
       resolveLoadmillRun: async (input) => {
-        assert.deepEqual(input.localRunIds, ["run-100", "run-101-2"]);
+        assert.deepEqual(input.localRunIds, [
+          "run-1788426858080",
+          "run-1788426858081-2",
+        ]);
         assert.equal(input.testCount, 2);
         return {
           id: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
