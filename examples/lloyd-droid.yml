@@ -1,0 +1,58 @@
+# Copy this file to .github/workflows/lloyd-droid.yml on the default branch.
+name: Lloyd Droid test
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: Loadmill Lloyd job ID
+        required: true
+        type: string
+      pr_number:
+        description: Pull request number
+        required: true
+        type: string
+      pr_sha:
+        description: Exact pull request commit SHA
+        required: true
+        type: string
+      test_paths:
+        description: JSON array of repository-relative .dcua test paths
+        required: true
+        type: string
+      context_path:
+        description: Optional repository-relative Droid context path
+        required: false
+        type: string
+      apk_workflow_run_id:
+        description: Workflow run containing the APK artifact
+        required: true
+        type: string
+      apk_artifact_name:
+        description: APK artifact name
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  run-selected-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Run Lloyd-selected Droid tests
+        uses: loadmill/lloyd-qa-action@v1
+        with:
+          job_id: ${{ inputs.job_id }}
+          pr_number: ${{ inputs.pr_number }}
+          pr_sha: ${{ inputs.pr_sha }}
+          test_paths: ${{ inputs.test_paths }}
+          context_path: ${{ inputs.context_path }}
+          apk_workflow_run_id: ${{ inputs.apk_workflow_run_id }}
+          apk_artifact_name: ${{ inputs.apk_artifact_name }}
+        env:
+          LOADMILL_API_TOKEN: ${{ secrets.LOADMILL_API_TOKEN }}
+          # Optional for a staging coordinator; omit in production.
+          # LOADMILL_BASE_URL: https://app-staging.loadmill.com

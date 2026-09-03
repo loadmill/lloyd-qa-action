@@ -1,0 +1,126 @@
+name: Lloyd QA
+description: Run Lloyd-selected Droid CUA tests and report results to Loadmill.
+
+inputs:
+  job_id:
+    description: Loadmill Lloyd job ID.
+    required: true
+  pr_number:
+    description: Pull request number.
+    required: true
+  pr_sha:
+    description: Exact pull request commit SHA to test.
+    required: true
+  test_paths:
+    description: JSON array of repository-relative .dcua test paths.
+    required: true
+  context_path:
+    description: Optional repository-relative Droid context file.
+    required: false
+    default: ""
+  apk_workflow_run_id:
+    description: Workflow run ID containing the APK artifact.
+    required: true
+  apk_artifact_name:
+    description: Name of the APK artifact in the specified workflow run.
+    required: true
+
+outputs:
+  status:
+    description: Lloyd final status.
+    value: ${{ steps.complete.outputs.status }}
+  results_artifact_name:
+    description: Name of the uploaded GitHub Actions results artifact.
+    value: ${{ steps.initialize.outputs.artifact_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: 24
+
+    - id: initialize
+      name: Initialize Lloyd job
+      shell: bash
+      env:
+        LLOYD_JOB_ID: ${{ inputs.job_id }}
+        LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
+        LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
+        LOADMILL_API_TOKEN: ${{ env.LOADMILL_API_TOKEN }}
+        LOADMILL_BASE_URL: ${{ env.LOADMILL_BASE_URL }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: node "$GITHUB_ACTION_PATH/src/initialize.js"
+
+    - name: Install pinned Droid CUA
+      shell: bash
+      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "@loadmill/droid-cua@2.36.0"
+
+    - name: Check out exact PR commit
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.pr_sha }}
+        persist-credentials: false
+
+    - name: Download APK artifact
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ inputs.apk_artifact_name }}
+        path: ${{ runner.temp }}/lloyd/apk
+        repository: ${{ github.repository }}
+        run-id: ${{ inputs.apk_workflow_run_id }}
+        github-token: ${{ github.token }}
+        skip-decompress: true
+
+    - id: run
+      name: Run Droid CUA
+      shell: bash
+      env:
+        LLOYD_JOB_ID: ${{ inputs.job_id }}
+        LLOYD_PR_SHA: ${{ inputs.pr_sha }}
+        LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
+        LLOYD_CONTEXT_PATH: ${{ inputs.context_path }}
+        LLOYD_APK_DIR: ${{ runner.temp }}/lloyd/apk
+        LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
+        LLOYD_DROID_EXECUTABLE: ${{ runner.temp }}/lloyd-tools/node_modules/.bin/droid-cua
+        LOADMILL_API_TOKEN: ${{ env.LOADMILL_API_TOKEN }}
+        LOADMILL_BASE_URL: ${{ env.LOADMILL_BASE_URL }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: node "$GITHUB_ACTION_PATH/src/run.js"
+
+    - id: upload
+      name: Upload Lloyd results
+      if: ${{ always() }}
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ steps.initialize.outputs.artifact_name }}
+        path: ${{ runner.temp }}/lloyd/results
+        if-no-files-found: warn
+        retention-days: 14
+
+    - id: complete
+      name: Report Lloyd completion
+      if: ${{ always() }}
+      shell: bash
+      env:
+        LLOYD_JOB_ID: ${{ inputs.job_id }}
+        LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
+        LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
+        LLOYD_RESULTS_ARTIFACT_NAME: ${{ steps.initialize.outputs.artifact_name }}
+        LLOYD_INITIALIZE_OUTCOME: ${{ steps.initialize.outcome }}
+        LLOYD_RUN_OUTCOME: ${{ steps.run.outcome }}
+        LLOYD_UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+        LLOYD_JOB_STATUS: ${{ job.status }}
+        LOADMILL_API_TOKEN: ${{ env.LOADMILL_API_TOKEN }}
+        LOADMILL_BASE_URL: ${{ env.LOADMILL_BASE_URL }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: node "$GITHUB_ACTION_PATH/src/complete.js"
+
+branding:
+  icon: smartphone
+  color: blue
