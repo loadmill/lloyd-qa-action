@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {reportProgress} from "./callbacks.js";
 import {createProgressParser, parseInstructions} from "./droid-progress.js";
+import {resolveLoadmillDroidRun} from "./loadmill-run.js";
 
 const TIMEOUT_MS = 40 * 60 * 1000;
 
@@ -61,6 +62,7 @@ export async function runDroid({
   environment = process.env,
   spawnProcess = spawn,
   fetchImpl = fetch,
+  resolveLoadmillRun = resolveLoadmillDroidRun,
   timeoutMs = TIMEOUT_MS,
 }) {
   await fs.mkdir(outputDirectory, {recursive: true});
@@ -110,6 +112,7 @@ export async function runDroid({
   }
 
   const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath});
+  const runStartedAt = Date.now();
   const child = spawnProcess(executable, args, {
     cwd: workspace,
     env: {...process.env, LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN},
@@ -117,10 +120,16 @@ export async function runDroid({
   });
   let log = "";
   const buffers = {stdout: "", stderr: ""};
+  const localRunIds = new Set();
+  let identifierBuffer = "";
 
   function capture(chunk, stream, destination) {
     const text = chunk.toString();
     log += text;
+    identifierBuffer = `${identifierBuffer}${text}`.slice(-4_096);
+    for (const match of identifierBuffer.matchAll(/execution-(run-\d+(?:-\d+)?)-/g)) {
+      localRunIds.add(match[1]);
+    }
     destination.write(chunk);
     const lines = `${buffers[stream]}${text}`.split(/\r?\n/);
     buffers[stream] = lines.pop() ?? "";
@@ -170,6 +179,21 @@ export async function runDroid({
     ),
   ]);
   const endedAt = Date.now();
+  let loadmillRun = null;
+  try {
+    loadmillRun = await resolveLoadmillRun({
+      token: environment.LOADMILL_API_TOKEN,
+      localRunIds: [...localRunIds],
+      projectName: path.basename(workspace),
+      testCount: tests.length,
+      startedAt: runStartedAt,
+      endedAt,
+      baseUrl: environment.LOADMILL_BASE_URL,
+      fetchImpl,
+    });
+  } catch (error) {
+    console.warn(`Warning: could not resolve the Loadmill Droid run link: ${error.message}`);
+  }
   tests[activeIndex].finishedAt ??= endedAt;
   if (tests.length === 1 && reportExists) tests[0].reportFile ??= "report.html";
   const results = await Promise.all(tests.map(async (test) => {
@@ -186,7 +210,7 @@ export async function runDroid({
       durationSeconds: Math.max(0, Math.round(((test.finishedAt ?? endedAt) - test.startedAt) / 1000)),
       exitCode: testExitCode,
       test: {path: test.testPath, ...test.parser.result(testExitCode)},
-      loadmillRun: null,
+      loadmillRun,
       reportFile: test.reportFile,
       logFile: "runner.log",
     };

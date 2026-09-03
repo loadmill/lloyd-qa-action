@@ -89,7 +89,7 @@ The working directory is the checked-out repository root. Droid runs the selecte
 
 The Action authenticates callbacks with `Authorization: Bearer <LOADMILL_API_TOKEN>`. It uses `https://app.loadmill.com` by default. Loadmill staging workflows may set `LOADMILL_BASE_URL` as an environment variable; it is intentionally not an Action input.
 
-Progress callback failures are warnings and do not interrupt the tests. The Action sends one completion callback per selected path using the same Lloyd job ID. It attempts every completion delivery; any delivery failure fails the Action.
+Progress callback failures are warnings and do not interrupt the tests. The Action sends one completion callback per selected path using the same Lloyd job ID. For multiple selected tests, every callback references Droid's single combined Loadmill report. It attempts every completion delivery; any delivery failure fails the Action.
 
 Progress stages are:
 
