@@ -72,8 +72,9 @@ export async function runDroid({
   const tests = await Promise.all(testPaths.map(async (testPath, index) => {
     const instructions = parseInstructions(await fs.readFile(testPath, "utf8"));
     const state = {
-      testPath: repositoryTestPaths[index], instructions,
+      sourcePath: testPath, testPath: repositoryTestPaths[index], instructions,
       reportFile: null, startedAt: Date.now(), finishedAt: null,
+      resultMessage: null,
     };
     state.parser = createProgressParser({
       instructions,
@@ -90,6 +91,17 @@ export async function runDroid({
 
   function parseRunnerLine(rawLine) {
     const value = rawLine.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "").trim();
+    if (value.startsWith("Test failed: ")) {
+      const failure = value.slice("Test failed: ".length);
+      const match = tests.flatMap((test) =>
+        [...new Set([test.testPath, path.basename(test.sourcePath)])]
+          .map((name) => ({test, name})))
+        .filter(({name}) => failure.startsWith(`${name}: `))
+        .sort((left, right) => right.name.length - left.name.length)[0];
+      if (match) {
+        match.test.resultMessage = failure.slice(match.name.length + 2).slice(0, 10_000);
+      }
+    }
     const boundary = value.match(/^\[(\d+)\/(\d+)\]\s+/);
     if (boundary) {
       if (tests[activeIndex] && Number(boundary[1]) - 1 !== activeIndex) {
@@ -208,7 +220,11 @@ export async function runDroid({
         : testStatus === "cancelled" ? 130 : null;
     return {
       status: testStatus,
-      detail: timedOut && !test.reportFile ? "Droid CUA exceeded the 40 minute timeout" : null,
+      detail: testStatus === "passed"
+        ? null
+        : test.resultMessage ?? (timedOut && !test.reportFile
+          ? "Droid CUA exceeded the 40 minute timeout"
+          : null),
       durationSeconds: Math.max(0, Math.round(((test.finishedAt ?? endedAt) - test.startedAt) / 1000)),
       exitCode: testExitCode,
       test: {path: test.testPath, ...test.parser.result(testExitCode)},

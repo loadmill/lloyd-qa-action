@@ -66,7 +66,9 @@ test("runs selected tests in one process and reports each result", async () => {
         "Debug logging enabled: /tmp/execution-run-1788426858081-2-2026-09-03T09-15-18-511Z.jsonl\n",
       );
       // stderr may arrive after the next stdout boundary; report status remains authoritative.
-      child.stderr.write("Test failed: first test assertion failed\n");
+      child.stderr.write(
+        "Test failed: tests/unsafe name; echo nope.dcua: first test assertion failed\n",
+      );
       child.stdout.write("Open cart\n");
       child.stdout.write("Test completed successfully.\n");
       const secondReport = path.join(outputDirectory, "checkout--report.html");
@@ -125,6 +127,8 @@ test("runs selected tests in one process and reports each result", async () => {
       body.test.path === "tests/checkout.dcua" && body.stage === "running_instruction"));
     assert.equal(batch.results[0].test.totalInstructions, 2);
     assert.equal(batch.results[0].test.completedInstructions, 1);
+    assert.equal(batch.results[0].detail, "first test assertion failed");
+    assert.equal(batch.results[1].detail, null);
     assert.equal(batch.results[0].reportFile, "login--report.html");
     assert.equal(batch.results[1].reportFile, "checkout--report.html");
     assert.equal(batch.results[0].logFile, "runner.log");
@@ -155,7 +159,7 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     child.stderr = new PassThrough();
     child.kill = () => true;
     queueMicrotask(async () => {
-      child.stderr.write("Test failed: assertion failed\n");
+      child.stderr.write("Test failed: test.dcua: assertion failed\n");
       await fs.writeFile(args[args.indexOf("--report") + 1], htmlReport("fail"));
       child.emit("close", 1, null);
     });
@@ -176,6 +180,7 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     });
     assert.equal(result.status, "test_failed");
     assert.equal(result.results[0].status, "test_failed");
+    assert.equal(result.results[0].detail, "assertion failed");
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }
