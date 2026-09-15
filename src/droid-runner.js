@@ -91,8 +91,9 @@ export async function runDroid({
 
   function parseRunnerLine(rawLine) {
     const value = rawLine.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "").trim();
-    if (value.startsWith("Test failed: ")) {
-      const failure = value.slice("Test failed: ".length);
+    const failedLine = value.match(/^Test failed\s*:\s*(.+)$/);
+    if (failedLine) {
+      const failure = failedLine[1];
       const match = tests.flatMap((test) =>
         [...new Set([test.testPath, path.basename(test.sourcePath)])]
           .map((name) => ({test, name})))
@@ -100,6 +101,8 @@ export async function runDroid({
         .sort((left, right) => right.name.length - left.name.length)[0];
       if (match) {
         match.test.resultMessage = failure.slice(match.name.length + 2).slice(0, 10_000);
+      } else if (tests[activeIndex]) {
+        tests[activeIndex].resultMessage = failure.slice(0, 10_000);
       }
     }
     const boundary = value.match(/^\[(\d+)\/(\d+)\]\s+/);

@@ -186,6 +186,41 @@ test("classifies a CLI failure with a report as test_failed", async () => {
   }
 });
 
+test("captures a Droid failure message without a test path", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-failure-message-"));
+  const testPath = path.join(root, "test.dcua");
+  await fs.writeFile(testPath, "Verify home\n");
+  function spawnProcess(_executable, args) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    queueMicrotask(async () => {
+      child.stderr.write("Test failed : Execution stopped: AI usage limit reached\n");
+      await fs.writeFile(args[args.indexOf("--report") + 1], htmlReport("fail"));
+      child.emit("close", 1, null);
+    });
+    return child;
+  }
+  try {
+    const result = await runDroid({
+      executable: "droid-cua",
+      apkPath: path.join(root, "app.apk"),
+      testPaths: [testPath],
+      repositoryTestPaths: ["test.dcua"],
+      contextPath: null,
+      workspace: root,
+      outputDirectory: path.join(root, "results"),
+      startedAt: Date.now(),
+      environment: callbackEnvironment,
+      spawnProcess,
+    });
+    assert.equal(result.results[0].detail, "Execution stopped: AI usage limit reached");
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("classifies an unexplained nonzero exit after a passing report as infrastructure_failed", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-exit-"));
   const testPath = path.join(root, "test.dcua");
