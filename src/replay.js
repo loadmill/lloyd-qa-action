@@ -6,6 +6,10 @@ import {readResult} from "./job-files.js";
 
 const SESSION_PATTERN = /^mtc_[0-9a-f-]{36}$/i;
 const VIDEO_PATTERN = /^video(?:-\d+)?\.(?:mp4|mov|webm)$/i;
+const RETRY_ATTEMPTS = 10;
+const RETRY_DELAY_MS = 1_000;
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 export async function discoverReplay(outputDirectory) {
   const artifactsDirectory = path.join(outputDirectory, "droid-cua-artifacts");
@@ -27,7 +31,7 @@ export async function discoverReplay(outputDirectory) {
   return sessions;
 }
 
-export async function registerReplay(environment = process.env, fetchImpl = fetch) {
+export async function registerReplay(environment = process.env, fetchImpl = fetch, waitImpl = wait) {
   const outputDirectory = requiredValue(environment, "LLOYD_RESULTS_DIR");
   const batch = await readResult(outputDirectory);
   const droidRunIds = [...new Set(batch.results
@@ -39,24 +43,32 @@ export async function registerReplay(environment = process.env, fetchImpl = fetc
     return {registered: false};
   }
   const session = sessions[0];
-  await postCallback({
-    endpoint: "replay",
-    payload: {
-      version: 1,
-      droidRunId: droidRunIds[0],
-      sessionId: session.sessionId,
-      recordings: session.recordings.map(({index, size}) => ({index, size})),
-      testPath: batch.results[0].test.path,
-      github: {
-        runId: requiredValue(environment, "GITHUB_RUN_ID"),
-        runAttempt: requiredValue(environment, "GITHUB_RUN_ATTEMPT"),
-      },
-    },
-    environment,
-    fetchImpl,
-  });
-  console.log(`Registered ${session.recordings.length} session replay recording${session.recordings.length === 1 ? "" : "s"}`);
-  return {registered: true};
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      await postCallback({
+        endpoint: "replay",
+        payload: {
+          version: 1,
+          droidRunId: droidRunIds[0],
+          sessionId: session.sessionId,
+          recordings: session.recordings.map(({index, size}) => ({index, size})),
+          testPath: batch.results[0].test.path,
+          github: {
+            runId: requiredValue(environment, "GITHUB_RUN_ID"),
+            runAttempt: requiredValue(environment, "GITHUB_RUN_ATTEMPT"),
+          },
+        },
+        environment,
+        fetchImpl,
+      });
+      console.log(`Registered ${session.recordings.length} session replay recording${session.recordings.length === 1 ? "" : "s"}`);
+      return {registered: true};
+    } catch (error) {
+      if (error.status !== 409 || attempt === RETRY_ATTEMPTS) throw error;
+      console.log(`Replay registration is not ready; retrying (${attempt}/${RETRY_ATTEMPTS})`);
+      await waitImpl(RETRY_DELAY_MS);
+    }
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

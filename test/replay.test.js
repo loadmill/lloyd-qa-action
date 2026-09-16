@@ -75,10 +75,31 @@ test("keeps the local video when registration fails", async () => {
   const {directory, sessionDirectory} = await fixture();
   try {
     await assert.rejects(
-      registerReplay(environment(directory), async () => ({ok: false, status: 409})),
+      registerReplay(environment(directory), async () => ({ok: false, status: 409}), async () => {}),
       /replay callback failed/,
     );
     await fs.access(path.join(sessionDirectory, "video.mp4"));
+  } finally {
+    await fs.rm(directory, {recursive: true, force: true});
+  }
+});
+
+test("retries replay registration while the cloud session is finalizing", async () => {
+  const {directory} = await fixture();
+  let attempts = 0;
+  let waits = 0;
+  try {
+    const result = await registerReplay(
+      environment(directory),
+      async () => {
+        attempts += 1;
+        return {ok: attempts === 3, status: attempts === 3 ? 200 : 409};
+      },
+      async () => { waits += 1; },
+    );
+    assert.equal(result.registered, true);
+    assert.equal(attempts, 3);
+    assert.equal(waits, 2);
   } finally {
     await fs.rm(directory, {recursive: true, force: true});
   }
