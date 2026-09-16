@@ -56,7 +56,7 @@ runs:
 
     - name: Install pinned Droid CUA
       shell: bash
-      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "$GITHUB_ACTION_PATH/vendor/loadmill-droid-cua-e7ac9c04.tgz"
+      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "$GITHUB_ACTION_PATH/vendor/loadmill-droid-cua-27abecf3.tgz"
 
     - name: Check out exact PR commit
       uses: actions/checkout@v6

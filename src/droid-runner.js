@@ -132,7 +132,11 @@ export async function runDroid({
   const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath});
   const child = spawnProcess(executable, args, {
     cwd: workspace,
-    env: {...process.env, LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN},
+    env: {
+      ...process.env,
+      LLOYD_JOB_ID: environment.LLOYD_JOB_ID,
+      LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let log = "";

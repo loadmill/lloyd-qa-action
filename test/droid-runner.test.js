@@ -124,6 +124,7 @@ test("runs selected tests in one process and reports each result", async () => {
     assert.match(invocation.executable, /node_modules\/\.bin\/droid-cua$/);
     assert.equal(invocation.options.shell, undefined);
     assert.equal(invocation.options.cwd, root);
+    assert.equal(invocation.options.env.LLOYD_JOB_ID, "job-123");
     assert.equal(invocation.options.env.LOADMILL_API_TOKEN, "token");
     assert.ok(invocation.args.includes("Google Pixel 8"));
     assert.ok(invocation.args.includes("14"));
