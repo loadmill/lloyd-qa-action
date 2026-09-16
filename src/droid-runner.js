@@ -90,6 +90,7 @@ export async function runDroid({
     return state;
   }));
   let activeIndex = 0;
+  const unscopedFailures = [];
 
   function parseRunnerLine(rawLine) {
     const value = rawLine.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "").trim();
@@ -103,8 +104,8 @@ export async function runDroid({
         .sort((left, right) => right.name.length - left.name.length)[0];
       if (match) {
         match.test.resultMessage = failure.slice(match.name.length + 2).slice(0, 10_000);
-      } else if (tests[activeIndex]) {
-        tests[activeIndex].resultMessage = failure.slice(0, 10_000);
+      } else {
+        unscopedFailures.push(failure.slice(0, 10_000));
       }
     }
     const boundary = value.match(/^\[(\d+)\/(\d+)\]\s+/);
@@ -241,6 +242,10 @@ export async function runDroid({
         exitCode,
       });
     }
+  }
+  for (const failure of unscopedFailures) {
+    const result = results.find((candidate) => candidate.status !== "passed" && !candidate.detail);
+    if (result) result.detail = failure;
   }
   const status = ["infrastructure_failed", "cancelled", "test_failed"]
     .find((candidate) => results.some((result) => result.status === candidate)) ?? "passed";

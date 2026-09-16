@@ -229,6 +229,51 @@ test("captures a Droid failure message without a test path", async () => {
   }
 });
 
+test("assigns an unscoped failure to the failed report after the next test starts", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-unscoped-batch-"));
+  const outputDirectory = path.join(root, "results");
+  const testPaths = [path.join(root, "first.dcua"), path.join(root, "second.dcua")];
+  await Promise.all(testPaths.map((testPath) => fs.writeFile(testPath, "Verify home\n")));
+  function spawnProcess(_executable, args) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    queueMicrotask(async () => {
+      child.stdout.write("[1/2] tests/first.dcua\n");
+      const firstReport = path.join(outputDirectory, "first--report.html");
+      await fs.writeFile(firstReport, htmlReport("fail"));
+      child.stdout.write(`HTML report saved: ${firstReport}\n`);
+      child.stdout.write("[2/2] tests/second.dcua\n");
+      child.stderr.write("Test failed: Execution stopped: AI usage limit reached\n");
+      const secondReport = path.join(outputDirectory, "second--report.html");
+      await fs.writeFile(secondReport, htmlReport("pass"));
+      child.stdout.write(`HTML report saved: ${secondReport}\n`);
+      await fs.writeFile(args[args.indexOf("--report") + 1], "<html></html>");
+      child.emit("close", 1, null);
+    });
+    return child;
+  }
+  try {
+    const result = await runDroid({
+      executable: "droid-cua",
+      apkPath: path.join(root, "app.apk"),
+      testPaths,
+      repositoryTestPaths: ["tests/first.dcua", "tests/second.dcua"],
+      contextPath: null,
+      workspace: root,
+      outputDirectory,
+      startedAt: Date.now(),
+      environment: callbackEnvironment,
+      spawnProcess,
+    });
+    assert.equal(result.results[0].detail, "Execution stopped: AI usage limit reached");
+    assert.equal(result.results[1].detail, null);
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
 test("classifies an unexplained nonzero exit after a passing report as infrastructure_failed", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-exit-"));
   const testPath = path.join(root, "test.dcua");
