@@ -48,7 +48,7 @@ test("discovers recordings under their exact Loadmill Cloud session", async () =
   }
 });
 
-test("registers verified metadata and removes the redundant local video", async () => {
+test("registers verified metadata and keeps the video in the diagnostic artifact", async () => {
   const {directory, sessionDirectory} = await fixture();
   let payload;
   try {
@@ -65,7 +65,7 @@ test("registers verified metadata and removes the redundant local video", async 
       testPath: "tests/login.dcua",
       github: {runId: "10", runAttempt: "2"},
     });
-    await assert.rejects(fs.access(path.join(sessionDirectory, "video.mp4")));
+    await fs.access(path.join(sessionDirectory, "video.mp4"));
   } finally {
     await fs.rm(directory, {recursive: true, force: true});
   }

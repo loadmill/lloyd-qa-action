@@ -20,7 +20,7 @@ export async function discoverReplay(outputDirectory) {
     const recordings = await Promise.all(names.map(async (name, index) => {
       const filePath = path.join(sessionDirectory, name);
       const stat = await fs.stat(filePath);
-      return {index, size: stat.size, filePath};
+      return {index, size: stat.size};
     }));
     if (recordings.length > 0) sessions.push({sessionId: entry.name, recordings});
   }
@@ -55,7 +55,6 @@ export async function registerReplay(environment = process.env, fetchImpl = fetc
     environment,
     fetchImpl,
   });
-  await Promise.all(session.recordings.map(({filePath}) => fs.unlink(filePath)));
   console.log(`Registered ${session.recordings.length} session replay recording${session.recordings.length === 1 ? "" : "s"}`);
   return {registered: true};
 }
