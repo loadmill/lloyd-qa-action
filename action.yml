@@ -91,6 +91,21 @@ runs:
         GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
       run: node "$GITHUB_ACTION_PATH/src/run.js"
 
+    - id: replay
+      name: Register session replay
+      if: ${{ always() && steps.run.outcome != 'skipped' }}
+      continue-on-error: true
+      timeout-minutes: 3
+      shell: bash
+      env:
+        LLOYD_JOB_ID: ${{ inputs.job_id }}
+        LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
+        LOADMILL_API_TOKEN: ${{ env.LOADMILL_API_TOKEN }}
+        LOADMILL_BASE_URL: ${{ env.LOADMILL_BASE_URL }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: node "$GITHUB_ACTION_PATH/src/replay.js"
+
     - id: upload
       name: Upload Lloyd results
       if: ${{ always() }}

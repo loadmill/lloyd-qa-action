@@ -24,6 +24,11 @@ test("action metadata wires the frozen inputs and trusted artifact actions", asy
   assert.match(metadata, /run-id: \$\{\{ inputs\.apk_workflow_run_id \}\}/);
   assert.match(metadata, /skip-decompress: true/);
   assert.match(metadata, /uses: actions\/upload-artifact@v7/);
+  assert.ok(
+    metadata.indexOf("Register session replay") < metadata.indexOf("Upload Lloyd results"),
+    "replay registration must remove confirmed videos before the diagnostic artifact upload",
+  );
+  assert.match(metadata, /timeout-minutes: 3/);
   assert.doesNotMatch(metadata, /github\.workspace.*(?:logs|droid-cua-artifacts)/);
   assert.match(metadata, /vendor\/loadmill-droid-cua-27abecf3\.tgz/);
 });
