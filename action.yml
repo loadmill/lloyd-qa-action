@@ -95,7 +95,6 @@ runs:
       name: Register session replay
       if: ${{ always() && steps.run.outcome != 'skipped' }}
       continue-on-error: true
-      timeout-minutes: 3
       shell: bash
       env:
         LLOYD_JOB_ID: ${{ inputs.job_id }}
@@ -104,7 +103,7 @@ runs:
         LOADMILL_BASE_URL: ${{ env.LOADMILL_BASE_URL }}
         GITHUB_RUN_ID: ${{ github.run_id }}
         GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
-      run: node "$GITHUB_ACTION_PATH/src/replay.js"
+      run: timeout 3m node "$GITHUB_ACTION_PATH/src/replay.js"
 
     - id: upload
       name: Upload Lloyd results

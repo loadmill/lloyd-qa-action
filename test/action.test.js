@@ -28,7 +28,7 @@ test("action metadata wires the frozen inputs and trusted artifact actions", asy
     metadata.indexOf("Register session replay") < metadata.indexOf("Upload Lloyd results"),
     "replay registration must finish before the diagnostic artifact upload",
   );
-  assert.match(metadata, /timeout-minutes: 3/);
+  assert.match(metadata, /run: timeout 3m node .*src\/replay\.js/);
   assert.doesNotMatch(metadata, /github\.workspace.*(?:logs|droid-cua-artifacts)/);
   assert.match(metadata, /vendor\/loadmill-droid-cua-27abecf3\.tgz/);
 });
