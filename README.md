@@ -117,7 +117,7 @@ The Action succeeds only when every selected test passes. Test, infrastructure, 
 
 ## Results artifact and outputs
 
-The results artifact is named deterministically as `lloyd-results-` followed by the first 20 hexadecimal characters of the SHA-256 digest of `job_id`. It is retained for 14 days. Confirmed session videos are excluded because the authenticated replay uses the existing Loadmill Cloud artifact.
+The results artifact is named deterministically as `lloyd-results-` followed by the first 20 hexadecimal characters of the SHA-256 digest of `job_id`. It is retained for 14 days and includes downloaded session videos even after authenticated replay registration succeeds.
 
 Outputs:
 
