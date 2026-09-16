@@ -25,5 +25,5 @@ test("action metadata wires the frozen inputs and trusted artifact actions", asy
   assert.match(metadata, /skip-decompress: true/);
   assert.match(metadata, /uses: actions\/upload-artifact@v7/);
   assert.doesNotMatch(metadata, /github\.workspace.*(?:logs|droid-cua-artifacts)/);
-  assert.match(metadata, /@loadmill\/droid-cua@2\.36\.0/);
+  assert.match(metadata, /github:loadmill\/droid-cua#e7ac9c04a930b129fea06ddea2910168555aa3e6/);
 });

@@ -7,7 +7,7 @@ import {resolveLoadmillDroidRun} from "./loadmill-run.js";
 
 const TIMEOUT_MS = 40 * 60 * 1000;
 
-export function createDroidArgs({apkPath, testPaths, contextPath, reportPath}) {
+export function createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath}) {
   const args = [
     "run", ...testPaths,
     "--llm-provider", "loadmill",
@@ -19,6 +19,7 @@ export function createDroidArgs({apkPath, testPaths, contextPath, reportPath}) {
     "--app", apkPath,
     "--artifacts", "video",
     "--report", reportPath,
+    "--report-metadata", reportMetadataPath,
     "--debug",
   ];
   if (contextPath) args.push("--context", contextPath);
@@ -67,6 +68,7 @@ export async function runDroid({
 }) {
   await fs.mkdir(outputDirectory, {recursive: true});
   const reportPath = path.join(outputDirectory, "report.html");
+  const reportMetadataPath = path.join(outputDirectory, "droid-report-metadata.json");
   const logPath = path.join(outputDirectory, "runner.log");
   let updates = Promise.resolve();
   const tests = await Promise.all(testPaths.map(async (testPath, index) => {
@@ -126,8 +128,7 @@ export async function runDroid({
     active.parser.line(rawLine);
   }
 
-  const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath});
-  const runStartedAt = Date.now();
+  const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath});
   const child = spawnProcess(executable, args, {
     cwd: workspace,
     env: {...process.env, LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN},
@@ -135,18 +136,10 @@ export async function runDroid({
   });
   let log = "";
   const buffers = {stdout: "", stderr: ""};
-  const localRunIds = new Set();
-  let identifierBuffer = "";
 
   function capture(chunk, stream, destination) {
     const text = chunk.toString();
     log += text;
-    identifierBuffer = `${identifierBuffer}${text}`.slice(-4_096);
-    for (const match of identifierBuffer.matchAll(
-      /execution-(run-\d+(?:-\d+)?)-\d{4}-\d{2}-\d{2}T/g,
-    )) {
-      localRunIds.add(match[1]);
-    }
     destination.write(chunk);
     const lines = `${buffers[stream]}${text}`.split(/\r?\n/);
     buffers[stream] = lines.pop() ?? "";
@@ -196,20 +189,14 @@ export async function runDroid({
     ),
   ]);
   const endedAt = Date.now();
-  let loadmillRun = null;
+  let reportMetadata = null;
   try {
-    loadmillRun = await resolveLoadmillRun({
-      token: environment.LOADMILL_API_TOKEN,
-      localRunIds: [...localRunIds],
-      projectName: path.basename(workspace),
-      testCount: tests.length,
-      startedAt: runStartedAt,
-      endedAt,
+    reportMetadata = await resolveLoadmillRun({
+      metadataPath: reportMetadataPath,
       baseUrl: environment.LOADMILL_BASE_URL,
-      fetchImpl,
     });
   } catch (error) {
-    console.warn(`Warning: could not resolve the Loadmill Droid run link: ${error.message}`);
+    console.warn(`Warning: could not read the Loadmill Droid report metadata: ${error.message}`);
   }
   tests[activeIndex].finishedAt ??= endedAt;
   if (tests.length === 1 && reportExists) tests[0].reportFile ??= "report.html";
@@ -231,7 +218,8 @@ export async function runDroid({
       durationSeconds: Math.max(0, Math.round(((test.finishedAt ?? endedAt) - test.startedAt) / 1000)),
       exitCode: testExitCode,
       test: {path: test.testPath, ...test.parser.result(testExitCode)},
-      loadmillRun,
+      loadmillRun: reportMetadata?.loadmillRun ?? null,
+      screenshot: reportMetadata?.screenshot ?? null,
       reportFile: test.reportFile,
       logFile: "runner.log",
     };

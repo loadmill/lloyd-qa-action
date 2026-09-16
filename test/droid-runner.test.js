@@ -75,7 +75,12 @@ test("runs selected tests in one process and reports each result", async () => {
       await fs.writeFile(secondReport, htmlReport("pass"));
       child.stdout.write(`HTML report saved: ${secondReport}\n`);
       const reportPath = args[args.indexOf("--report") + 1];
+      const metadataPath = args[args.indexOf("--report-metadata") + 1];
       await fs.writeFile(reportPath, "<html></html>");
+      await fs.writeFile(metadataPath, JSON.stringify({
+        runId: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+        lastScreenshotObjectName: "screenshots/0016.png",
+      }));
       child.emit("close", 1, null);
     });
     return child;
@@ -96,14 +101,16 @@ test("runs selected tests in one process and reports each result", async () => {
       environment: callbackEnvironment,
       spawnProcess,
       resolveLoadmillRun: async (input) => {
-        assert.deepEqual(input.localRunIds, [
-          "run-1788426858080",
-          "run-1788426858081-2",
-        ]);
-        assert.equal(input.testCount, 2);
+        assert.equal(input.metadataPath, path.join(outputDirectory, "droid-report-metadata.json"));
         return {
-          id: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
-          url: "https://app.loadmill.com/app/api-tests/droid-runs/c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+          loadmillRun: {
+            id: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+            url: "https://app.loadmill.com/app/api-tests/droid-runs/c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+          },
+          screenshot: {
+            runId: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+            objectName: "screenshots/0016.png",
+          },
         };
       },
       fetchImpl: async (url, options) => {
@@ -133,6 +140,7 @@ test("runs selected tests in one process and reports each result", async () => {
     assert.equal(batch.results[1].reportFile, "checkout--report.html");
     assert.equal(batch.results[0].logFile, "runner.log");
     assert.deepEqual(batch.results[0].loadmillRun, batch.results[1].loadmillRun);
+    assert.deepEqual(batch.results[0].screenshot, batch.results[1].screenshot);
     assert.equal(
       await fs.readFile(path.join(outputDirectory, "logs", "debug.jsonl"), "utf8"),
       "debug",

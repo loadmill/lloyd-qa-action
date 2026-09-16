@@ -2,7 +2,7 @@
 
 `loadmill/lloyd-qa-action` runs Lloyd-selected [Droid CUA](https://www.npmjs.com/package/@loadmill/droid-cua) tests against an Android APK and reports structured progress and results to Loadmill.
 
-The Action is deliberately a thin wrapper. It installs the pinned `@loadmill/droid-cua@2.36.0` package in the runner's temporary directory before checking out PR code, then invokes its existing `run` command and normal CLI flags. Lloyd-specific job state remains inside this Action; Droid CUA has no Lloyd-specific flag or behavior.
+The Action is deliberately a thin wrapper. It installs the exact Droid CUA test commit `e7ac9c04a930b129fea06ddea2910168555aa3e6` in the runner's temporary directory before checking out PR code, then invokes its existing `run` command and normal CLI flags. Lloyd-specific job state remains inside this Action; Droid exposes only generic structured report metadata. Replace the commit pin with the corresponding exact published version before release.
 
 ## Requirements
 
@@ -89,7 +89,7 @@ The working directory is the checked-out repository root. Droid runs the selecte
 
 The Action authenticates callbacks with `Authorization: Bearer <LOADMILL_API_TOKEN>`. It uses `https://app.loadmill.com` by default. Loadmill staging workflows may set `LOADMILL_BASE_URL` as an environment variable; it is intentionally not an Action input.
 
-Progress callback failures are warnings and do not interrupt the tests. The Action sends one completion callback per selected path using the same Lloyd job ID. For multiple selected tests, every callback references Droid's single combined Loadmill report. It attempts every completion delivery; any delivery failure fails the Action.
+Progress callback failures are warnings and do not interrupt the tests. The Action sends one completion callback per selected path using the same Lloyd job ID. For multiple selected tests, every callback references Droid's single combined Loadmill report. When Droid successfully publishes a screenshot-backed report, the callback also carries the exact saved run ID and last screenshot object in capture order. The optional field is omitted when no uploaded screenshot reference is available. The Action attempts every completion delivery; any delivery failure fails the Action.
 
 Progress stages are:
 
