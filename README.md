@@ -2,7 +2,7 @@
 
 `loadmill/lloyd-qa-action` runs Lloyd-selected [Droid CUA](https://www.npmjs.com/package/@loadmill/droid-cua) tests against an Android APK and reports structured progress and results to Loadmill.
 
-The Action is deliberately a thin wrapper. It installs the pinned `@loadmill/droid-cua@2.36.0` package in the runner's temporary directory before checking out PR code, then invokes its existing `run` command and normal CLI flags. Lloyd-specific job state remains inside this Action; Droid CUA has no Lloyd-specific flag or behavior.
+The Action is deliberately a thin wrapper. It installs the exact Droid CUA version `2.39.0` in the runner's temporary directory before checking out PR code, then invokes its existing `run` command and normal CLI flags. The Action forwards the Lloyd job ID so Droid can bind the saved run to the exact execution alongside its structured report metadata.
 
 ## Requirements
 
@@ -89,7 +89,9 @@ The working directory is the checked-out repository root. Droid runs the selecte
 
 The Action authenticates callbacks with `Authorization: Bearer <LOADMILL_API_TOKEN>`. It uses `https://app.loadmill.com` by default. Loadmill staging workflows may set `LOADMILL_BASE_URL` as an environment variable; it is intentionally not an Action input.
 
-Progress callback failures are warnings and do not interrupt the tests. The Action sends one completion callback per selected path using the same Lloyd job ID. For multiple selected tests, every callback references Droid's single combined Loadmill report. It attempts every completion delivery; any delivery failure fails the Action.
+Progress callback failures are warnings and do not interrupt the tests. The Action sends one completion callback per selected path using the same Lloyd job ID. For multiple selected tests, every callback references Droid's single combined Loadmill report. When Droid successfully publishes a screenshot-backed report, the callback also carries the exact saved run ID and last screenshot object in capture order. The optional field is omitted when no uploaded screenshot reference is available. The Action attempts every completion delivery; any delivery failure fails the Action.
+
+Before completion, the Action registers a session replay when Droid downloaded a video under one exact Loadmill Cloud session directory. Loadmill verifies the saved Droid run and cloud session ownership before associating the existing private provider artifact. The downloaded video remains in the combined GitHub diagnostic artifact whether registration succeeds or fails. Registration is time-bounded and best-effort: failure does not change the test outcome or prevent completion callbacks.
 
 Progress stages are:
 
@@ -115,7 +117,7 @@ The Action succeeds only when every selected test passes. Test, infrastructure, 
 
 ## Results artifact and outputs
 
-The results artifact is named deterministically as `lloyd-results-` followed by the first 20 hexadecimal characters of the SHA-256 digest of `job_id`. It is retained for 14 days.
+The results artifact is named deterministically as `lloyd-results-` followed by the first 20 hexadecimal characters of the SHA-256 digest of `job_id`. It is retained for 14 days and includes downloaded session videos even after authenticated replay registration succeeds.
 
 Outputs:
 

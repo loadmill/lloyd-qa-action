@@ -56,7 +56,7 @@ runs:
 
     - name: Install pinned Droid CUA
       shell: bash
-      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "@loadmill/droid-cua@2.36.0"
+      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "$GITHUB_ACTION_PATH/vendor/loadmill-droid-cua-2.39.0.tgz"
 
     - name: Check out exact PR commit
       uses: actions/checkout@v6
@@ -90,6 +90,20 @@ runs:
         GITHUB_RUN_ID: ${{ github.run_id }}
         GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
       run: node "$GITHUB_ACTION_PATH/src/run.js"
+
+    - id: replay
+      name: Register session replay
+      if: ${{ always() && steps.run.outcome != 'skipped' }}
+      continue-on-error: true
+      shell: bash
+      env:
+        LLOYD_JOB_ID: ${{ inputs.job_id }}
+        LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
+        LOADMILL_API_TOKEN: ${{ env.LOADMILL_API_TOKEN }}
+        LOADMILL_BASE_URL: ${{ env.LOADMILL_BASE_URL }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      run: timeout 3m node "$GITHUB_ACTION_PATH/src/replay.js"
 
     - id: upload
       name: Upload Lloyd results

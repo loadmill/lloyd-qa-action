@@ -66,14 +66,21 @@ test("runs selected tests in one process and reports each result", async () => {
         "Debug logging enabled: /tmp/execution-run-1788426858081-2-2026-09-03T09-15-18-511Z.jsonl\n",
       );
       // stderr may arrive after the next stdout boundary; report status remains authoritative.
-      child.stderr.write("Test failed: first test assertion failed\n");
+      child.stderr.write(
+        "Test failed: tests/unsafe name; echo nope.dcua: first test assertion failed\n",
+      );
       child.stdout.write("Open cart\n");
       child.stdout.write("Test completed successfully.\n");
       const secondReport = path.join(outputDirectory, "checkout--report.html");
       await fs.writeFile(secondReport, htmlReport("pass"));
       child.stdout.write(`HTML report saved: ${secondReport}\n`);
       const reportPath = args[args.indexOf("--report") + 1];
+      const metadataPath = args[args.indexOf("--report-metadata") + 1];
       await fs.writeFile(reportPath, "<html></html>");
+      await fs.writeFile(metadataPath, JSON.stringify({
+        runId: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+        lastScreenshotObjectName: "screenshots/0016.png",
+      }));
       child.emit("close", 1, null);
     });
     return child;
@@ -94,14 +101,16 @@ test("runs selected tests in one process and reports each result", async () => {
       environment: callbackEnvironment,
       spawnProcess,
       resolveLoadmillRun: async (input) => {
-        assert.deepEqual(input.localRunIds, [
-          "run-1788426858080",
-          "run-1788426858081-2",
-        ]);
-        assert.equal(input.testCount, 2);
+        assert.equal(input.metadataPath, path.join(outputDirectory, "droid-report-metadata.json"));
         return {
-          id: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
-          url: "https://app.loadmill.com/app/api-tests/droid-runs/c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+          loadmillRun: {
+            id: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+            url: "https://app.loadmill.com/app/api-tests/droid-runs/c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+          },
+          screenshot: {
+            runId: "c87ec69f-d3cd-44f1-9f80-49dd87a9bb53",
+            objectName: "screenshots/0016.png",
+          },
         };
       },
       fetchImpl: async (url, options) => {
@@ -115,6 +124,7 @@ test("runs selected tests in one process and reports each result", async () => {
     assert.match(invocation.executable, /node_modules\/\.bin\/droid-cua$/);
     assert.equal(invocation.options.shell, undefined);
     assert.equal(invocation.options.cwd, root);
+    assert.equal(invocation.options.env.LLOYD_JOB_ID, "job-123");
     assert.equal(invocation.options.env.LOADMILL_API_TOKEN, "token");
     assert.ok(invocation.args.includes("Google Pixel 8"));
     assert.ok(invocation.args.includes("14"));
@@ -125,10 +135,13 @@ test("runs selected tests in one process and reports each result", async () => {
       body.test.path === "tests/checkout.dcua" && body.stage === "running_instruction"));
     assert.equal(batch.results[0].test.totalInstructions, 2);
     assert.equal(batch.results[0].test.completedInstructions, 1);
+    assert.equal(batch.results[0].detail, "first test assertion failed");
+    assert.equal(batch.results[1].detail, null);
     assert.equal(batch.results[0].reportFile, "login--report.html");
     assert.equal(batch.results[1].reportFile, "checkout--report.html");
     assert.equal(batch.results[0].logFile, "runner.log");
     assert.deepEqual(batch.results[0].loadmillRun, batch.results[1].loadmillRun);
+    assert.deepEqual(batch.results[0].screenshot, batch.results[1].screenshot);
     assert.equal(
       await fs.readFile(path.join(outputDirectory, "logs", "debug.jsonl"), "utf8"),
       "debug",
@@ -155,7 +168,7 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     child.stderr = new PassThrough();
     child.kill = () => true;
     queueMicrotask(async () => {
-      child.stderr.write("Test failed: assertion failed\n");
+      child.stderr.write("Test failed: test.dcua: assertion failed\n");
       await fs.writeFile(args[args.indexOf("--report") + 1], htmlReport("fail"));
       child.emit("close", 1, null);
     });
@@ -176,6 +189,87 @@ test("classifies a CLI failure with a report as test_failed", async () => {
     });
     assert.equal(result.status, "test_failed");
     assert.equal(result.results[0].status, "test_failed");
+    assert.equal(result.results[0].detail, "assertion failed");
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("captures a Droid failure message without a test path", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-failure-message-"));
+  const testPath = path.join(root, "test.dcua");
+  await fs.writeFile(testPath, "Verify home\n");
+  function spawnProcess(_executable, args) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    queueMicrotask(async () => {
+      child.stderr.write("Test failed : Execution stopped: AI usage limit reached\n");
+      await fs.writeFile(args[args.indexOf("--report") + 1], htmlReport("fail"));
+      child.emit("close", 1, null);
+    });
+    return child;
+  }
+  try {
+    const result = await runDroid({
+      executable: "droid-cua",
+      apkPath: path.join(root, "app.apk"),
+      testPaths: [testPath],
+      repositoryTestPaths: ["test.dcua"],
+      contextPath: null,
+      workspace: root,
+      outputDirectory: path.join(root, "results"),
+      startedAt: Date.now(),
+      environment: callbackEnvironment,
+      spawnProcess,
+    });
+    assert.equal(result.results[0].detail, "Execution stopped: AI usage limit reached");
+  } finally {
+    await fs.rm(root, {recursive: true, force: true});
+  }
+});
+
+test("assigns an unscoped failure to the failed report after the next test starts", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lloyd-unscoped-batch-"));
+  const outputDirectory = path.join(root, "results");
+  const testPaths = [path.join(root, "first.dcua"), path.join(root, "second.dcua")];
+  await Promise.all(testPaths.map((testPath) => fs.writeFile(testPath, "Verify home\n")));
+  function spawnProcess(_executable, args) {
+    const child = new EventEmitter();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => true;
+    queueMicrotask(async () => {
+      child.stdout.write("[1/2] tests/first.dcua\n");
+      const firstReport = path.join(outputDirectory, "first--report.html");
+      await fs.writeFile(firstReport, htmlReport("fail"));
+      child.stdout.write(`HTML report saved: ${firstReport}\n`);
+      child.stdout.write("[2/2] tests/second.dcua\n");
+      child.stderr.write("Test failed: Execution stopped: AI usage limit reached\n");
+      const secondReport = path.join(outputDirectory, "second--report.html");
+      await fs.writeFile(secondReport, htmlReport("pass"));
+      child.stdout.write(`HTML report saved: ${secondReport}\n`);
+      await fs.writeFile(args[args.indexOf("--report") + 1], "<html></html>");
+      child.emit("close", 1, null);
+    });
+    return child;
+  }
+  try {
+    const result = await runDroid({
+      executable: "droid-cua",
+      apkPath: path.join(root, "app.apk"),
+      testPaths,
+      repositoryTestPaths: ["tests/first.dcua", "tests/second.dcua"],
+      contextPath: null,
+      workspace: root,
+      outputDirectory,
+      startedAt: Date.now(),
+      environment: callbackEnvironment,
+      spawnProcess,
+    });
+    assert.equal(result.results[0].detail, "Execution stopped: AI usage limit reached");
+    assert.equal(result.results[1].detail, null);
   } finally {
     await fs.rm(root, {recursive: true, force: true});
   }
