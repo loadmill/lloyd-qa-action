@@ -21,12 +21,7 @@ export async function discoverReplay(outputDirectory) {
     const names = (await fs.readdir(sessionDirectory))
       .filter((name) => VIDEO_PATTERN.test(name))
       .sort();
-    const recordings = await Promise.all(names.map(async (name, index) => {
-      const filePath = path.join(sessionDirectory, name);
-      const stat = await fs.stat(filePath);
-      return {index, size: stat.size};
-    }));
-    if (recordings.length > 0) sessions.push({sessionId: entry.name, recordings});
+    if (names.length > 0) sessions.push({sessionId: entry.name});
   }
   return sessions;
 }
@@ -38,7 +33,7 @@ export async function registerReplay(environment = process.env, fetchImpl = fetc
     .map((result) => result.loadmillRun?.id)
     .filter(Boolean))];
   const sessions = await discoverReplay(outputDirectory);
-  if (droidRunIds.length !== 1 || sessions.length !== 1 || !batch.results[0]?.test?.path) {
+  if (droidRunIds.length !== 1 || sessions.length !== 1) {
     console.warn("Warning: could not identify one exact Droid run and cloud session for replay");
     return {registered: false};
   }
@@ -51,17 +46,11 @@ export async function registerReplay(environment = process.env, fetchImpl = fetc
           version: 1,
           droidRunId: droidRunIds[0],
           sessionId: session.sessionId,
-          recordings: session.recordings.map(({index, size}) => ({index, size})),
-          testPath: batch.results[0].test.path,
-          github: {
-            runId: requiredValue(environment, "GITHUB_RUN_ID"),
-            runAttempt: requiredValue(environment, "GITHUB_RUN_ATTEMPT"),
-          },
         },
         environment,
         fetchImpl,
       });
-      console.log(`Registered ${session.recordings.length} session replay recording${session.recordings.length === 1 ? "" : "s"}`);
+      console.log("Registered session replay");
       return {registered: true};
     } catch (error) {
       if (error.status !== 409 || attempt === RETRY_ATTEMPTS) throw error;

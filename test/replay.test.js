@@ -40,9 +40,7 @@ test("discovers recordings under their exact Loadmill Cloud session", async () =
     const sessions = await discoverReplay(directory);
     assert.equal(sessions.length, 1);
     assert.equal(sessions[0].sessionId, sessionId);
-    assert.deepEqual(sessions[0].recordings.map(({index, size}) => ({index, size})), [
-      {index: 0, size: Buffer.byteLength("recording")},
-    ]);
+    assert.deepEqual(sessions, [{sessionId}]);
   } finally {
     await fs.rm(directory, {recursive: true, force: true});
   }
@@ -61,9 +59,6 @@ test("registers verified metadata and keeps the video in the diagnostic artifact
       version: 1,
       droidRunId,
       sessionId,
-      recordings: [{index: 0, size: Buffer.byteLength("recording")}],
-      testPath: "tests/login.dcua",
-      github: {runId: "10", runAttempt: "2"},
     });
     await fs.access(path.join(sessionDirectory, "video.mp4"));
   } finally {
