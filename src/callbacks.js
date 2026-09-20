@@ -29,7 +29,9 @@ export async function postCallback({
     },
   );
   if (!response.ok) {
-    throw new Error(`Loadmill ${endpoint} callback failed (HTTP ${response.status})`);
+    const error = new Error(`Loadmill ${endpoint} callback failed (HTTP ${response.status})`);
+    error.status = response.status;
+    throw error;
   }
 }
 

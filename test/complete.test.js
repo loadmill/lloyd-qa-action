@@ -34,6 +34,7 @@ const passedResult = {
     currentInstruction: {current: 2, total: 2, instruction: "Verify home"},
   },
   loadmillRun: {id: "run-id", url: "https://app.loadmill.com/run"},
+  screenshot: {runId: "run-id", objectName: "screenshots/0016.png"},
   reportFile: "report.html",
   logFile: "runner.log",
 };
@@ -53,6 +54,7 @@ test("builds exactly the frozen completion payload", () => {
       exitCode: 0,
       test: passedResult.test,
       loadmillRun: passedResult.loadmillRun,
+      screenshot: passedResult.screenshot,
       artifacts: {
         name: "lloyd-results-fixed",
         reportFile: "report.html",

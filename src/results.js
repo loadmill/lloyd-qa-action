@@ -13,6 +13,7 @@ export function failureResult({testPath, startedAt, detail, cancelled = false}) 
       currentInstruction: null,
     },
     loadmillRun: null,
+    screenshot: null,
     reportFile: null,
     logFile: null,
   };
@@ -31,6 +32,7 @@ export function completionPayload({result, artifactName, environment}) {
     exitCode: result.exitCode ?? null,
     test: result.test,
     loadmillRun: result.loadmillRun ?? null,
+    ...(result.screenshot ? {screenshot: result.screenshot} : {}),
     artifacts: {
       name: artifactName,
       reportFile: result.reportFile ?? null,

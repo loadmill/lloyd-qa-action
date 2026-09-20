@@ -7,7 +7,7 @@ import {resolveLoadmillDroidRun} from "./loadmill-run.js";
 
 const TIMEOUT_MS = 40 * 60 * 1000;
 
-export function createDroidArgs({apkPath, testPaths, contextPath, reportPath}) {
+export function createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath}) {
   const args = [
     "run", ...testPaths,
     "--llm-provider", "loadmill",
@@ -19,6 +19,7 @@ export function createDroidArgs({apkPath, testPaths, contextPath, reportPath}) {
     "--app", apkPath,
     "--artifacts", "video",
     "--report", reportPath,
+    "--report-metadata", reportMetadataPath,
     "--debug",
   ];
   if (contextPath) args.push("--context", contextPath);
@@ -67,13 +68,15 @@ export async function runDroid({
 }) {
   await fs.mkdir(outputDirectory, {recursive: true});
   const reportPath = path.join(outputDirectory, "report.html");
+  const reportMetadataPath = path.join(outputDirectory, "droid-report-metadata.json");
   const logPath = path.join(outputDirectory, "runner.log");
   let updates = Promise.resolve();
   const tests = await Promise.all(testPaths.map(async (testPath, index) => {
     const instructions = parseInstructions(await fs.readFile(testPath, "utf8"));
     const state = {
-      testPath: repositoryTestPaths[index], instructions,
+      sourcePath: testPath, testPath: repositoryTestPaths[index], instructions,
       reportFile: null, startedAt: Date.now(), finishedAt: null,
+      resultMessage: null,
     };
     state.parser = createProgressParser({
       instructions,
@@ -87,9 +90,24 @@ export async function runDroid({
     return state;
   }));
   let activeIndex = 0;
+  const unscopedFailures = [];
 
   function parseRunnerLine(rawLine) {
     const value = rawLine.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "").trim();
+    const failedLine = value.match(/^Test failed\s*:\s*(.+)$/);
+    if (failedLine) {
+      const failure = failedLine[1];
+      const match = tests.flatMap((test) =>
+        [...new Set([test.testPath, path.basename(test.sourcePath)])]
+          .map((name) => ({test, name})))
+        .filter(({name}) => failure.startsWith(`${name}: `))
+        .sort((left, right) => right.name.length - left.name.length)[0];
+      if (match) {
+        match.test.resultMessage = failure.slice(match.name.length + 2).slice(0, 10_000);
+      } else {
+        unscopedFailures.push(failure.slice(0, 10_000));
+      }
+    }
     const boundary = value.match(/^\[(\d+)\/(\d+)\]\s+/);
     if (boundary) {
       if (tests[activeIndex] && Number(boundary[1]) - 1 !== activeIndex) {
@@ -111,27 +129,22 @@ export async function runDroid({
     active.parser.line(rawLine);
   }
 
-  const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath});
-  const runStartedAt = Date.now();
+  const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath});
   const child = spawnProcess(executable, args, {
     cwd: workspace,
-    env: {...process.env, LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN},
+    env: {
+      ...process.env,
+      LLOYD_JOB_ID: environment.LLOYD_JOB_ID,
+      LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let log = "";
   const buffers = {stdout: "", stderr: ""};
-  const localRunIds = new Set();
-  let identifierBuffer = "";
 
   function capture(chunk, stream, destination) {
     const text = chunk.toString();
     log += text;
-    identifierBuffer = `${identifierBuffer}${text}`.slice(-4_096);
-    for (const match of identifierBuffer.matchAll(
-      /execution-(run-\d+(?:-\d+)?)-\d{4}-\d{2}-\d{2}T/g,
-    )) {
-      localRunIds.add(match[1]);
-    }
     destination.write(chunk);
     const lines = `${buffers[stream]}${text}`.split(/\r?\n/);
     buffers[stream] = lines.pop() ?? "";
@@ -181,20 +194,14 @@ export async function runDroid({
     ),
   ]);
   const endedAt = Date.now();
-  let loadmillRun = null;
+  let reportMetadata = null;
   try {
-    loadmillRun = await resolveLoadmillRun({
-      token: environment.LOADMILL_API_TOKEN,
-      localRunIds: [...localRunIds],
-      projectName: path.basename(workspace),
-      testCount: tests.length,
-      startedAt: runStartedAt,
-      endedAt,
+    reportMetadata = await resolveLoadmillRun({
+      metadataPath: reportMetadataPath,
       baseUrl: environment.LOADMILL_BASE_URL,
-      fetchImpl,
     });
   } catch (error) {
-    console.warn(`Warning: could not resolve the Loadmill Droid run link: ${error.message}`);
+    console.warn(`Warning: could not read the Loadmill Droid report metadata: ${error.message}`);
   }
   tests[activeIndex].finishedAt ??= endedAt;
   if (tests.length === 1 && reportExists) tests[0].reportFile ??= "report.html";
@@ -208,11 +215,16 @@ export async function runDroid({
         : testStatus === "cancelled" ? 130 : null;
     return {
       status: testStatus,
-      detail: timedOut && !test.reportFile ? "Droid CUA exceeded the 40 minute timeout" : null,
+      detail: testStatus === "passed"
+        ? null
+        : test.resultMessage ?? (timedOut && !test.reportFile
+          ? "Droid CUA exceeded the 40 minute timeout"
+          : null),
       durationSeconds: Math.max(0, Math.round(((test.finishedAt ?? endedAt) - test.startedAt) / 1000)),
       exitCode: testExitCode,
       test: {path: test.testPath, ...test.parser.result(testExitCode)},
-      loadmillRun,
+      loadmillRun: reportMetadata?.loadmillRun ?? null,
+      screenshot: reportMetadata?.screenshot ?? null,
       reportFile: test.reportFile,
       logFile: "runner.log",
     };
@@ -234,6 +246,10 @@ export async function runDroid({
         exitCode,
       });
     }
+  }
+  for (const failure of unscopedFailures) {
+    const result = results.find((candidate) => candidate.status !== "passed" && !candidate.detail);
+    if (result) result.detail = failure;
   }
   const status = ["infrastructure_failed", "cancelled", "test_failed"]
     .find((candidate) => results.some((result) => result.status === candidate)) ?? "passed";
