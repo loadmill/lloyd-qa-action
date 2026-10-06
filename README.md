@@ -53,9 +53,16 @@ jobs:
           apk_artifact_name: ${{ inputs.apk_artifact_name }}
         env:
           LOADMILL_API_TOKEN: ${{ secrets.LOADMILL_API_TOKEN }}
+          LLOYD_SECRETS: >-
+            {
+              "MAKER_USERNAME": ${{ toJSON(secrets.MAKER_USERNAME) }},
+              "MAKER_PASSWORD": ${{ toJSON(secrets.MAKER_PASSWORD) }}
+            }
 ```
 
 Do not pass `LOADMILL_API_TOKEN` through a workflow input. GitHub masks repository secrets and does not expose this secret to the coordinator's dispatch payload.
+
+`LLOYD_SECRETS` is optional. Set each value from an individual GitHub Actions secret as above so credentials can be rotated independently. The JSON object uses the secret keys referenced by your `.dcua` tests. The Action creates a temporary `.secrets` file for Droid and removes it after the run.
 
 ## Inputs
 

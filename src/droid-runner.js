@@ -130,10 +130,12 @@ export async function runDroid({
   }
 
   const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath});
+  const childEnvironment = {...process.env};
+  delete childEnvironment.LLOYD_SECRETS;
   const child = spawnProcess(executable, args, {
     cwd: workspace,
     env: {
-      ...process.env,
+      ...childEnvironment,
       LLOYD_JOB_ID: environment.LLOYD_JOB_ID,
       LOADMILL_API_TOKEN: environment.LOADMILL_API_TOKEN,
     },
