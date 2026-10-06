@@ -82,6 +82,7 @@ runs:
         LLOYD_PR_SHA: ${{ inputs.pr_sha }}
         LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
         LLOYD_CONTEXT_PATH: ${{ inputs.context_path }}
+        LLOYD_SECRETS: ${{ env.LLOYD_SECRETS }}
         LLOYD_APK_DIR: ${{ runner.temp }}/lloyd/apk
         LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
         LLOYD_DROID_EXECUTABLE: ${{ runner.temp }}/lloyd-tools/node_modules/.bin/droid-cua
