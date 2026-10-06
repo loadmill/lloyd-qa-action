@@ -7,14 +7,19 @@ function formatSecret(key, value) {
   }
   const quote = ["`", "'", '"'].find((candidate) =>
     !value.includes(candidate) && (candidate !== '"' || !/\\[nr]/.test(value)));
-  if (!quote) {
-    throw new Error(`LLOYD_SECRETS value for ${key} cannot be represented in Droid's .secrets format`);
-  }
-  return `${key}=${quote}${value}${quote}`;
+  if (quote) return `${key}=${quote}${value}${quote}`;
+  if (value.trim() === value && !/[#\r\n]/.test(value)) return `${key}=${value}`;
+  throw new Error(`LLOYD_SECRETS value for ${key} cannot be represented in Droid's .secrets format`);
 }
 
 export async function withDroidSecrets(workspace, rawSecrets, run) {
   if (rawSecrets === undefined || rawSecrets === "") return run();
+  const filePath = path.join(workspace, ".secrets");
+  const exists = await fs.lstat(filePath).then(() => true, (error) => {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  });
+  if (exists) return run();
 
   let secrets;
   try {
@@ -27,7 +32,6 @@ export async function withDroidSecrets(workspace, rawSecrets, run) {
   }
 
   const content = Object.entries(secrets).map(([key, value]) => formatSecret(key, value)).join("\n");
-  const filePath = path.join(workspace, ".secrets");
   await fs.writeFile(filePath, `${content}\n`, {flag: "wx", mode: 0o600});
   try {
     return await run();

@@ -95,20 +95,45 @@ test("prepares validated files only after verifying the exact checkout SHA", asy
 test("passes LLOYD_SECRETS to Droid through a temporary .secrets file", async () => {
   const value = await fixture();
   const env = environment(value);
-  env.LLOYD_SECRETS = JSON.stringify({USER_EMAIL: "user@example.com", USER_PASSWORD: "p#ss word"});
+  env.LLOYD_SECRETS = JSON.stringify({
+    USER_EMAIL: "user@example.com",
+    USER_PASSWORD: "p#ss word",
+    QUOTED_PASSWORD: "pa`ss'wo\"rd",
+  });
   const secretsPath = path.join(value.workspace, ".secrets");
   try {
     const result = await run(env, {
       fetchImpl: async () => ({ok: true, status: 200}),
       runDroid: async () => {
         assert.equal(await fs.readFile(secretsPath, "utf8"),
-          "USER_EMAIL=`user@example.com`\nUSER_PASSWORD=`p#ss word`\n");
+          "USER_EMAIL=`user@example.com`\nUSER_PASSWORD=`p#ss word`\nQUOTED_PASSWORD=pa`ss'wo\"rd\n");
         assert.equal((await fs.stat(secretsPath)).mode & 0o777, 0o600);
         return {status: "passed", results: []};
       },
     });
     assert.equal(result.status, "passed");
     await assert.rejects(fs.access(secretsPath), {code: "ENOENT"});
+  } finally {
+    await fs.rm(value.root, {recursive: true, force: true});
+  }
+});
+
+test("uses an existing .secrets file without replacing it", async () => {
+  const value = await fixture();
+  const env = environment(value);
+  env.LLOYD_SECRETS = JSON.stringify({USER_PASSWORD: "new-password"});
+  const secretsPath = path.join(value.workspace, ".secrets");
+  await fs.writeFile(secretsPath, "USER_PASSWORD=existing-password\n");
+  try {
+    const result = await run(env, {
+      fetchImpl: async () => ({ok: true, status: 200}),
+      runDroid: async () => {
+        assert.equal(await fs.readFile(secretsPath, "utf8"), "USER_PASSWORD=existing-password\n");
+        return {status: "passed", results: []};
+      },
+    });
+    assert.equal(result.status, "passed");
+    assert.equal(await fs.readFile(secretsPath, "utf8"), "USER_PASSWORD=existing-password\n");
   } finally {
     await fs.rm(value.root, {recursive: true, force: true});
   }

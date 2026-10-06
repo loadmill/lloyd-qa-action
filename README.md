@@ -62,7 +62,7 @@ jobs:
 
 Do not pass `LOADMILL_API_TOKEN` through a workflow input. GitHub masks repository secrets and does not expose this secret to the coordinator's dispatch payload.
 
-`LLOYD_SECRETS` is optional. Set each value from an individual GitHub Actions secret as above so credentials can be rotated independently. The JSON object uses the secret keys referenced by your `.dcua` tests. The Action creates a temporary `.secrets` file for Droid and removes it after the run.
+`LLOYD_SECRETS` is optional. Set each value from an individual GitHub Actions secret as above so credentials can be rotated independently. The JSON object uses the secret keys referenced by your `.dcua` tests. The Action creates a temporary `.secrets` file for Droid and removes it after the run. If the checked-out project already has a `.secrets` file, Droid uses that file unchanged.
 
 ## Inputs
 
