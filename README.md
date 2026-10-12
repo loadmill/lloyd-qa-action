@@ -95,7 +95,7 @@ The Action invokes Droid CUA without a shell and passes each CLI argument separa
 
 The working directory is the checked-out repository root. Droid runs the selected paths sequentially in one cloud-device session. Droid's `logs` and `droid-cua-artifacts` directories, individual and aggregate HTML reports, and the combined runner log are collected when present.
 
-The Action passes an optional `config_path` to Droid with `--config`. When omitted, Droid uses its defaults. The fixed provider/model flags above and an explicit `context_path` take precedence over the corresponding JSON settings.
+The Action passes an optional `config_path` to Droid with `--config`. When omitted, Droid uses its defaults. The fixed provider/model flags above take precedence over the corresponding JSON settings. Context is controlled by `context_path`: the Action passes `--context` when supplied, otherwise `--no-context`, overriding context settings in the JSON config.
 
 ## Loadmill callbacks
 

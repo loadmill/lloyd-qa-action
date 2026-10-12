@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {PassThrough} from "node:stream";
 import test from "node:test";
-import {runDroid} from "../src/droid-runner.js";
+import {createDroidArgs, runDroid} from "../src/droid-runner.js";
 import {parseInstructions} from "../src/droid-progress.js";
 
 const callbackEnvironment = {
@@ -18,6 +18,15 @@ const callbackEnvironment = {
 function htmlReport(status) {
   return `<span class="dc-pill dc-pill-${status}">${status}</span>`;
 }
+
+test("disables config-provided context unless Lloyd supplies a context path", () => {
+  for (const configPath of [undefined, "/workspace/config.json"]) {
+    const args = createDroidArgs({testPaths: ["test.dcua"], configPath});
+    assert.ok(args.includes("--no-context"));
+    assert.equal(args.includes("--context"), false);
+    assert.equal(args.includes("--config"), Boolean(configPath));
+  }
+});
 
 test("parses the same executable instruction lines as Droid", () => {
   assert.deepEqual(
@@ -133,6 +142,8 @@ test("runs selected tests in one process and reports each result", async () => {
     assert.deepEqual(invocation.args.slice(0, 3), ["run", ...testPaths]);
     assert.equal(invocation.args.includes("--instructions"), false);
     assert.equal(invocation.args[invocation.args.indexOf("--config") + 1], path.join(root, "config.json"));
+    assert.equal(invocation.args[invocation.args.indexOf("--context") + 1], path.join(root, "context.md"));
+    assert.equal(invocation.args.includes("--no-context"), false);
     assert.ok(callbacks.some(({body}) =>
       body.test.path === "tests/checkout.dcua" && body.stage === "running_instruction"));
     assert.equal(batch.results[0].test.totalInstructions, 2);

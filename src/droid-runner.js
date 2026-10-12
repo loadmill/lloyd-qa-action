@@ -23,6 +23,7 @@ export function createDroidArgs({apkPath, testPaths, contextPath, configPath, re
     "--debug",
   ];
   if (contextPath) args.push("--context", contextPath);
+  else args.push("--no-context");
   if (configPath) args.push("--config", configPath);
   return args;
 }
