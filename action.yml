@@ -58,9 +58,11 @@ runs:
         GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
       run: node "$GITHUB_ACTION_PATH/src/initialize.js"
 
-    - name: Install pinned Droid CUA
+    - name: Install latest Droid CUA
       shell: bash
-      run: npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" "$GITHUB_ACTION_PATH/vendor/loadmill-droid-cua-2.39.0.tgz"
+      run: |
+        npm install --no-save --prefix "$RUNNER_TEMP/lloyd-tools" @loadmill/droid-cua@latest
+        node -p "'Installed @loadmill/droid-cua@' + require(process.env.RUNNER_TEMP + '/lloyd-tools/node_modules/@loadmill/droid-cua/package.json').version"
 
     - name: Check out exact PR commit
       uses: actions/checkout@v6
