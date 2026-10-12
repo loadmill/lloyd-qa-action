@@ -2,7 +2,7 @@
 
 `loadmill/lloyd-qa-action` runs Lloyd-selected [Droid CUA](https://www.npmjs.com/package/@loadmill/droid-cua) tests against an Android APK and reports structured progress and results to Loadmill.
 
-The Action is deliberately a thin wrapper. It installs the exact Droid CUA version `2.39.0` in the runner's temporary directory before checking out PR code, then invokes its existing `run` command and normal CLI flags. The Action forwards the Lloyd job ID so Droid can bind the saved run to the exact execution alongside its structured report metadata.
+The Action is deliberately a thin wrapper. It installs `@loadmill/droid-cua@latest` from npm into the runner's temporary directory before checking out PR code, logs the installed version, then invokes its existing `run` command and normal CLI flags. The Action forwards the Lloyd job ID so Droid can bind the saved run to the exact execution alongside its structured report metadata.
 
 ## Requirements
 
@@ -144,4 +144,4 @@ Outputs:
 npm test
 ```
 
-Do not loosen the exact Droid CUA dependency version without coordinating the Lloyd contract and validating the CLI output used for progress parsing.
+Droid updates take effect on the next run, including when the Action is pinned to a commit SHA. Validate the Lloyd CLI contract and progress output before publishing Droid releases to `latest`.

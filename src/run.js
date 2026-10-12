@@ -1,7 +1,7 @@
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 import {reportProgress} from "./callbacks.js";
-import {DROID_CUA_PACKAGE, requiredValue} from "./contract.js";
+import {requiredValue} from "./contract.js";
 import {runDroid} from "./droid-runner.js";
 import {readJson, STATE_FILE, writeResult} from "./job-files.js";
 import {findSingleApk, resolveRepositoryFile} from "./paths.js";
@@ -57,7 +57,6 @@ export async function run(environment = process.env, dependencies = {}) {
       stage: "preparing_test", startedAt, testPath, environment,
       fetchImpl: dependencies.fetchImpl,
     })));
-    console.log(`Running ${DROID_CUA_PACKAGE}`);
     result = await withDroidSecrets(workspace, environment.LLOYD_SECRETS, () =>
       (dependencies.runDroid ?? runDroid)({
         executable: requiredValue(environment, "LLOYD_DROID_EXECUTABLE"),

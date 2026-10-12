@@ -31,5 +31,6 @@ test("action metadata wires the frozen inputs and trusted artifact actions", asy
   );
   assert.match(metadata, /run: timeout 3m node .*src\/replay\.js/);
   assert.doesNotMatch(metadata, /github\.workspace.*(?:logs|droid-cua-artifacts)/);
-  assert.match(metadata, /vendor\/loadmill-droid-cua-2\.39\.0\.tgz/);
+  assert.match(metadata, /@loadmill\/droid-cua@latest/);
+  assert.match(metadata, /droid-cua\/package\.json/);
 });
