@@ -86,11 +86,38 @@ test("prepares validated files only after verifying the exact checkout SHA", asy
       await fs.realpath(path.join(value.apkDirectory, "app.apk")),
     );
     assert.equal(invocation.workspace, value.workspace);
+    assert.equal(invocation.configPath, null);
     await assert.rejects(fs.access(path.join(value.workspace, ".secrets")), {code: "ENOENT"});
   } finally {
     await fs.rm(value.root, {recursive: true, force: true});
   }
 });
+
+for (const hasConfig of [false, true]) {
+  test(`uses ${hasConfig ? "the supplied config" : "defaults"} without a context file`, async () => {
+    const value = await fixture();
+    const env = environment(value);
+    delete env.LLOYD_CONTEXT_PATH;
+    try {
+      const configPath = path.join(value.workspace, "tests/config.json");
+      if (hasConfig) env.LLOYD_CONFIG_PATH = "tests/config.json";
+      if (hasConfig) await fs.writeFile(configPath, '{"aimAssistMode":"off","contextOptimizationThreshold":90000}');
+      let invocation;
+      const result = await run(env, {
+        fetchImpl: async () => ({ok: true, status: 200}),
+        runDroid: async (input) => {
+          invocation = input;
+          return {status: "passed", results: []};
+        },
+      });
+      assert.equal(result.status, "passed");
+      assert.equal(invocation.configPath, hasConfig ? await fs.realpath(configPath) : null);
+      assert.equal(invocation.contextPath, null);
+    } finally {
+      await fs.rm(value.root, {recursive: true, force: true});
+    }
+  });
+}
 
 test("passes LLOYD_SECRETS to Droid through a temporary .secrets file", async () => {
   const value = await fixture();

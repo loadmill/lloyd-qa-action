@@ -46,6 +46,10 @@ export async function run(environment = process.env, dependencies = {}) {
           label: "context_path",
         })
       : null;
+    const configInput = environment.LLOYD_CONFIG_PATH?.trim();
+    const configPath = configInput
+      ? await resolveRepositoryFile({workspace, repositoryPath: configInput, label: "config_path"})
+      : null;
     const apkPath = await findSingleApk(requiredValue(environment, "LLOYD_APK_DIR"));
     requiredValue(environment, "LOADMILL_API_TOKEN");
 
@@ -61,6 +65,7 @@ export async function run(environment = process.env, dependencies = {}) {
         testPaths,
         repositoryTestPaths,
         contextPath,
+        configPath,
         workspace,
         outputDirectory: resultsDirectory,
         startedAt,

@@ -18,6 +18,10 @@ inputs:
     description: Optional repository-relative Droid context file.
     required: false
     default: ""
+  config_path:
+    description: Optional repository-relative Droid config file.
+    required: false
+    default: ""
   apk_workflow_run_id:
     description: Workflow run ID containing the APK artifact.
     required: true
@@ -82,6 +86,7 @@ runs:
         LLOYD_PR_SHA: ${{ inputs.pr_sha }}
         LLOYD_TEST_PATHS: ${{ inputs.test_paths }}
         LLOYD_CONTEXT_PATH: ${{ inputs.context_path }}
+        LLOYD_CONFIG_PATH: ${{ inputs.config_path }}
         LLOYD_SECRETS: ${{ env.LLOYD_SECRETS }}
         LLOYD_APK_DIR: ${{ runner.temp }}/lloyd/apk
         LLOYD_RESULTS_DIR: ${{ runner.temp }}/lloyd/results
