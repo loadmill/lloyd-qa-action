@@ -24,6 +24,10 @@ on:
         description: Optional repository-relative Droid context path
         required: false
         type: string
+      config_path:
+        description: Optional repository-relative Droid config file
+        required: false
+        type: string
       apk_workflow_run_id:
         description: Workflow run containing the APK artifact
         required: true
@@ -50,6 +54,7 @@ jobs:
           pr_sha: ${{ inputs.pr_sha }}
           test_paths: ${{ inputs.test_paths }}
           context_path: ${{ inputs.context_path }}
+          config_path: ${{ inputs.config_path }}
           apk_workflow_run_id: ${{ inputs.apk_workflow_run_id }}
           apk_artifact_name: ${{ inputs.apk_artifact_name }}
         env:

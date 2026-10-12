@@ -7,7 +7,7 @@ import {resolveLoadmillDroidRun} from "./loadmill-run.js";
 
 const TIMEOUT_MS = 40 * 60 * 1000;
 
-export function createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath}) {
+export function createDroidArgs({apkPath, testPaths, contextPath, configPath, reportPath, reportMetadataPath}) {
   const args = [
     "run", ...testPaths,
     "--llm-provider", "loadmill",
@@ -23,6 +23,7 @@ export function createDroidArgs({apkPath, testPaths, contextPath, reportPath, re
     "--debug",
   ];
   if (contextPath) args.push("--context", contextPath);
+  if (configPath) args.push("--config", configPath);
   return args;
 }
 
@@ -57,6 +58,7 @@ export async function runDroid({
   testPaths,
   repositoryTestPaths,
   contextPath,
+  configPath,
   workspace,
   outputDirectory,
   startedAt,
@@ -129,7 +131,7 @@ export async function runDroid({
     active.parser.line(rawLine);
   }
 
-  const args = createDroidArgs({apkPath, testPaths, contextPath, reportPath, reportMetadataPath});
+  const args = createDroidArgs({apkPath, testPaths, contextPath, configPath, reportPath, reportMetadataPath});
   const childEnvironment = {...process.env};
   delete childEnvironment.LLOYD_SECRETS;
   const child = spawnProcess(executable, args, {

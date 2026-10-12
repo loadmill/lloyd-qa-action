@@ -95,6 +95,7 @@ test("runs selected tests in one process and reports each result", async () => {
         "tests/unsafe name; echo nope.dcua", "tests/checkout.dcua",
       ],
       contextPath: path.join(root, "context.md"),
+      configPath: path.join(root, "config.json"),
       workspace: root,
       outputDirectory,
       startedAt: Date.now(),
@@ -131,6 +132,7 @@ test("runs selected tests in one process and reports each result", async () => {
     assert.ok(invocation.args.includes("loadmill-cloud"));
     assert.deepEqual(invocation.args.slice(0, 3), ["run", ...testPaths]);
     assert.equal(invocation.args.includes("--instructions"), false);
+    assert.equal(invocation.args[invocation.args.indexOf("--config") + 1], path.join(root, "config.json"));
     assert.ok(callbacks.some(({body}) =>
       body.test.path === "tests/checkout.dcua" && body.stage === "running_instruction"));
     assert.equal(batch.results[0].test.totalInstructions, 2);

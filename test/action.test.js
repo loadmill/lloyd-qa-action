@@ -10,6 +10,7 @@ test("action metadata wires the frozen inputs and trusted artifact actions", asy
     "pr_sha",
     "test_paths",
     "context_path",
+    "config_path",
     "apk_workflow_run_id",
     "apk_artifact_name",
   ]) {

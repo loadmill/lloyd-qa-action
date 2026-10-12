@@ -7,7 +7,7 @@ The Action is deliberately a thin wrapper. It installs the exact Droid CUA versi
 ## Requirements
 
 - A Linux GitHub-hosted runner (the example uses `ubuntu-latest`).
-- A workflow triggered with the seven Lloyd dispatch inputs shown below.
+- A workflow triggered with the eight Lloyd dispatch inputs shown below.
 - `contents: read` and `actions: read` workflow permissions.
 - A repository secret named `LOADMILL_API_TOKEN`.
 - An APK artifact produced by a workflow run in the same repository. The selected artifact must contain exactly one `.apk` file.
@@ -30,6 +30,7 @@ on:
       pr_sha: {required: true, type: string}
       test_paths: {required: true, type: string}
       context_path: {required: false, type: string}
+      config_path: {required: false, type: string}
       apk_workflow_run_id: {required: true, type: string}
       apk_artifact_name: {required: true, type: string}
 
@@ -49,6 +50,7 @@ jobs:
           pr_sha: ${{ inputs.pr_sha }}
           test_paths: ${{ inputs.test_paths }}
           context_path: ${{ inputs.context_path }}
+          config_path: ${{ inputs.config_path }}
           apk_workflow_run_id: ${{ inputs.apk_workflow_run_id }}
           apk_artifact_name: ${{ inputs.apk_artifact_name }}
         env:
@@ -73,6 +75,7 @@ Do not pass `LOADMILL_API_TOKEN` through a workflow input. GitHub masks reposito
 | `pr_sha` | Yes | Full 40-character commit SHA. The Action checks out and verifies this exact commit. |
 | `test_paths` | Yes | JSON array of repository-relative `.dcua` test paths, in execution order. |
 | `context_path` | No | Repository-relative path to a Droid context file. |
+| `config_path` | No | Repository-relative path to a Droid JSON config file. |
 | `apk_workflow_run_id` | Yes | GitHub Actions workflow run containing the APK artifact. |
 | `apk_artifact_name` | Yes | Exact artifact name in that workflow run. |
 
@@ -91,6 +94,8 @@ The Action invokes Droid CUA without a shell and passes each CLI argument separa
 - Video artifacts, HTML report, and debug logging enabled
 
 The working directory is the checked-out repository root. Droid runs the selected paths sequentially in one cloud-device session. Droid's `logs` and `droid-cua-artifacts` directories, individual and aggregate HTML reports, and the combined runner log are collected when present.
+
+The Action passes an optional `config_path` to Droid with `--config`. When omitted, Droid uses its defaults. The fixed provider/model flags above and an explicit `context_path` take precedence over the corresponding JSON settings.
 
 ## Loadmill callbacks
 
